@@ -1,0 +1,55 @@
+# Example configuration for spectro-calendar.
+#
+# Usage:
+#   spectro-calendar --config example_config.yaml
+#
+# Every key here corresponds to a CLI flag (with dashes replaced by
+# underscores, e.g. --output-dir -> output_dir). Any flag passed explicitly
+# on the command line overrides the value set here, e.g.:
+#
+#   spectro-calendar --config example_config.yaml --max-cores 2
+#
+# You only need to list the options you want to override -- anything
+# omitted keeps its normal CLI default. Unknown keys cause an error.
+
+# Positional argument -- can be set here instead of on the command line.
+recording_dir: /data/site-1/recordings
+
+# Where to write spectrogram images, the HTML calendar, and the CSS.
+# Defaults to recording_dir if omitted.
+output_dir: /data/site-1/calendar
+
+# Backend selection and parallelism.
+use_ffmpeg: true
+max_cores: 6
+
+# Spectrogram rendering parameters.
+gain: 1
+gain_scale: log
+highest_freq: 20000
+lowest_freq: 0
+freq_scale: lin
+color_choice: plasma
+spec_label: lf
+img_size: "1080x720"
+thumbnail_scale: "108:72"
+
+# Behavior flags.
+clear: false
+include_audio: true
+
+# Date / time filtering. Dates must be quoted so they stay strings
+# (YYYYMMDD), not YAML numbers.
+dates:
+  - "20260301"
+  - "20260302"
+time_step: 30
+start_time: "050000"
+end_time: "090000"
+
+# Filename convention -- these defaults already match AudioMoth
+# (YYYYMMDD_HHMMSS.WAV), shown here only as an example of overriding them,
+# e.g. for a Wildlife Acoustics SM4 recorder:
+#   filename_prefix: "SM4_"
+datetime_format: "%Y%m%d_%H%M%S"
+filename_prefix: ""
