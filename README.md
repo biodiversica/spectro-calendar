@@ -146,6 +146,8 @@ list of valid keys) rather than silently ignored.
 | `--clear` | off | Delete existing `*<label>.png` files in the output directory before generating new ones |
 | `--include-audio` | off | Embed an `<audio>` player under each thumbnail, linking back to the matching WAV in `recording_dir` |
 | `--dates D1 D2 ...` | all dates | Restrict processing to specific `YYYYMMDD` dates (validated against dates actually present, using the parsed recording date regardless of filename format) |
+| `--start-date YYYYMMDD` | earliest available | First date to include; selects a contiguous range instead of an explicit list. Cannot be combined with `--dates` |
+| `--end-date YYYYMMDD` | latest available | Last date to include (inclusive). Cannot be combined with `--dates` |
 | `--time-step N` | none | Keep only one recording per N-minute interval per day, instead of every recording |
 | `--start-time HHMMSS` | `000000` | Start of the daily time window to include |
 | `--end-time HHMMSS` | `235900` | End of the daily time window to include |
@@ -215,8 +217,12 @@ command executes these steps, in order:
 
 4. **Date filtering** — if `--dates` was given, those values are checked
    against the dates actually present (`validate_dates` raises if any
-   requested date has no recordings); otherwise all discovered dates are
-   used.
+   requested date has no recordings). If `--start-date`/`--end-date` was
+   given instead, `filter_dates_by_range` keeps the discovered dates inside
+   that inclusive range — the bounds themselves need not have recordings,
+   and either bound may be omitted to leave that end open, but the run
+   aborts if the range selects nothing. The two forms are mutually
+   exclusive; with neither, all discovered dates are used.
 
 5. **Time-of-day filtering** — `filter_wav_files_by_time_window` keeps only
    files whose time falls within `[--start-time, --end-time]` for each

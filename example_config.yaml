@@ -43,6 +43,11 @@ include_audio: true
 dates:
   - "20260301"
   - "20260302"
+# Alternatively, select a contiguous range instead of a list -- start_date and
+# end_date are inclusive, either one may be omitted to leave that end open,
+# and they cannot be combined with `dates` above.
+#start_date: "20260301"
+#end_date: "20260305"
 time_step: 30
 start_time: "050000"
 end_time: "090000"

@@ -289,6 +289,62 @@ def validate_dates(dates, available_dates):
     if invalid_dates:
         raise ValueError(f"Invalid dates provided: {', '.join(invalid_dates)}")
 
+def parse_date_string(date_str, label):
+    """
+    Parses a YYYYMMDD date string into a date object.
+
+    Args:
+        date_str: The value to parse; coerced to str first, so an unquoted
+            YAML number such as 20260301 is accepted as well as "20260301"
+        label (str): Name of the option being parsed, used in error messages
+
+    Returns:
+        date: The parsed date
+
+    Raises:
+        ValueError: If the value isn't a valid YYYYMMDD date
+    """
+    try:
+        return datetime.strptime(str(date_str), "%Y%m%d").date()
+    except ValueError as e:
+        raise ValueError(f"{label} must be a date in YYYYMMDD format, got '{date_str}': {e}") from e
+
+def filter_dates_by_range(available_dates, start_date, end_date):
+    """
+    Selects the available dates falling inside an inclusive date range.
+
+    Either bound may be None, leaving that end of the range open. Unlike
+    validate_dates, the bounds themselves need not have recordings -- only
+    the dates in between that do are returned.
+
+    Args:
+        available_dates (list of str): Dates present in the recordings (YYYYMMDD)
+        start_date (str or None): First date to include (YYYYMMDD)
+        end_date (str or None): Last date to include (YYYYMMDD)
+
+    Returns:
+        list of str: The subset of available_dates within the range, sorted
+
+    Raises:
+        ValueError: If a bound isn't a valid YYYYMMDD date, or start is after end
+    """
+    start = parse_date_string(start_date, "start_date") if start_date else None
+    end = parse_date_string(end_date, "end_date") if end_date else None
+
+    if start and end and start > end:
+        raise ValueError(f"start_date '{start_date}' is after end_date '{end_date}'")
+
+    selected = []
+    for date in available_dates:
+        current = parse_date_string(date, "recording date")
+        if start and current < start:
+            continue
+        if end and current > end:
+            continue
+        selected.append(date)
+
+    return selected
+
 def load_yaml_config(config_path, valid_keys):
     """
     Loads a YAML config file mapping CLI argument names (dest, e.g.
@@ -633,6 +689,8 @@ def main():
     parser.add_argument("--clear", action="store_true", help="Clear existing spectrograms before creating new ones")
     parser.add_argument("--include-audio", action="store_true", help="Include audio player below each spectrogram image")
     parser.add_argument("--dates", nargs='*', default=None, help="Specify specific dates in the format YYYYMMDD (default: all)")
+    parser.add_argument("--start-date", default=None, type=str, help="First date to include, in YYYYMMDD format (default: earliest available). Cannot be combined with --dates")
+    parser.add_argument("--end-date", default=None, type=str, help="Last date to include, in YYYYMMDD format (default: latest available). Cannot be combined with --dates")
     parser.add_argument("--time-step", default=None, type=int, help="Time step in minutes (default: all)")
     parser.add_argument("--start-time", default='000000', type=str, help="Start time of the day in HHMMSS format (e.g., '050000' for 5 AM)")
     parser.add_argument("--end-time", default='235900', type=str, help="End time of the day in HHMMSS format (e.g., '090000' for 9 AM)")
@@ -687,9 +745,23 @@ def main():
     available_dates = get_available_dates(file_dates)
 
     # Filter dates based on user input
+    if args.dates and (args.start_date or args.end_date):
+        sys.exit("--dates cannot be combined with --start-date/--end-date: use either an explicit list or a range")
+
     if args.dates:
         validate_dates(args.dates, available_dates)
         dates_to_process = args.dates
+    elif args.start_date or args.end_date:
+        try:
+            dates_to_process = filter_dates_by_range(available_dates, args.start_date, args.end_date)
+        except ValueError as e:
+            sys.exit(str(e))
+        if not dates_to_process:
+            sys.exit(
+                f"No recordings found in the requested date range "
+                f"({args.start_date or 'any'} to {args.end_date or 'any'}). "
+                f"Available dates: {', '.join(available_dates)}"
+            )
     else:
         dates_to_process = available_dates
 
