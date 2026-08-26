@@ -13,3 +13,6 @@ venv/
 .vscode/
 .idea/
 .DS_Store
+
+# local scripts
+scripts/

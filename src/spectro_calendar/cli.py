@@ -336,10 +336,14 @@ def run(cmd):
     """
     Executes a shell command with error handling.
 
+    stdin is detached: ffmpeg grabs the terminal into raw, no-echo mode to
+    listen for its interactive keys, and parallel workers race each other
+    restoring it, which can leave the shell with echo turned off.
+
     Args:
         cmd (list): List of command-line arguments for subprocess
     """
-    subprocess.run(cmd, check=True)
+    subprocess.run(cmd, check=True, stdin=subprocess.DEVNULL)
 
 # ------------------------
 # Spectrogram generation using scipy
