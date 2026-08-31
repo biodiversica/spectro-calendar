@@ -18,6 +18,8 @@ This can be considered as an extended adaptation of the [scripts created by Nath
 - [`uv`](https://docs.astral.sh/uv/) (recommended) or plain `pip`, for dependency management
 - Optionally, [`ffmpeg`](https://ffmpeg.org/) on your `PATH` for the fast
   spectrogram backend (see [Backends](#backends) below)
+- Optionally, [`sshfs`](https://github.com/libfuse/sshfs), if the recordings
+  live on a remote machine (see [Remote recordings over SSH](#remote-recordings-over-ssh) below)
 
 ## Installation
 
@@ -181,6 +183,48 @@ part before the extension) before that format is applied.
 If a filename doesn't start with `--filename-prefix`, or the remainder
 doesn't match `--datetime-format`, the tool exits with an error naming the
 offending file rather than silently skipping or misparsing it.
+
+### Remote recordings over SSH
+
+If the recordings live on a remote machine, mount that directory locally with
+[`sshfs`](https://github.com/libfuse/sshfs) and point `recording_dir` at the
+mount. Nothing else changes — the tool only ever reads from `recording_dir`,
+so a read-only mount is enough:
+
+```bash
+sshfs user@host:/data/site-1/recordings ~/mnt/site-1 \
+  -o ro,reconnect,cache=yes,kernel_cache
+
+uv run spectro-calendar ~/mnt/site-1 \
+  --output-dir ~/calendars/site-1 \
+  --use-ffmpeg --include-audio
+```
+
+Generating the spectrograms pulls every selected WAV across the link once —
+that is the slow part, and there is no way around it, since each file has to
+be read in full to compute its spectrogram. The date/time filters
+(`--dates` or `--start-date`/`--end-date`, `--start-time`/`--end-time`,
+`--time-step`) are the lever for keeping that transfer down. Everything
+written out — PNGs, HTML, CSS — lands locally in `--output-dir`.
+
+**Playing the audio does not require downloading it.** With `--include-audio`,
+each cell's `<audio>` element streams straight through the mount: the browser
+fetches only the recording you actually press play on, and only as far as you
+listen. Nothing is copied to local disk beyond the OS page cache. Note that
+WAV is uncompressed (an AudioMoth minute at 48 kHz is roughly 23 MB), so
+playback is comfortable over a LAN or VPN and can stall on a slow link.
+
+Two things to watch for:
+
+- Open `index_<label>.html` straight from disk (`file://`). The relative path
+  from `--output-dir` back to the mount points outside the output directory
+  (e.g. `../../mnt/site-1/20260304_100000.WAV`), so serving `--output-dir`
+  with something like `python -m http.server` will fail to resolve the audio,
+  even though the thumbnails still load — that server refuses to serve paths
+  above its root.
+- If the connection drops, `-o reconnect` restores the mount, but any
+  in-flight read fails first; re-run the command to fill in spectrograms that
+  were missed. Unmount with `fusermount -u ~/mnt/site-1`.
 
 ## How it works
 
