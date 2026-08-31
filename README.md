@@ -192,13 +192,34 @@ mount. Nothing else changes — the tool only ever reads from `recording_dir`,
 so a read-only mount is enough:
 
 ```bash
-sshfs user@host:/data/site-1/recordings ~/mnt/site-1 \
-  -o ro,reconnect,cache=yes,kernel_cache
+mkdir -p ~/mnt/site-1
+sshfs user@host:/path/on/server ~/mnt/site-1 \
+  -o ro,reconnect,cache=yes,kernel_cache \
+  -o IdentityFile=$HOME/.ssh/your_key,IdentitiesOnly=yes
 
 uv run spectro-calendar ~/mnt/site-1 \
   --output-dir ~/calendars/site-1 \
   --use-ffmpeg --include-audio
 ```
+
+**Getting the remote path right.** `sshfs` talks to the SSH server's *SFTP
+subsystem*, whose filesystem view is often not the one you get from a login
+shell — NAS appliances in particular tend to expose shared folders at the SFTP
+root. A path that works with `scp` can therefore fail with `sshfs`, especially
+on OpenSSH clients older than 9.0, where `scp` runs over the remote shell
+instead of SFTP. Ask SFTP directly rather than guessing:
+
+```bash
+sftp user@host
+sftp> pwd     # SFTP's idea of where you are
+sftp> ls /    # what actually sits at the SFTP root
+```
+
+On a Synology, for example, the shell may report `/volume1/homes/you` while
+SFTP puts the shared folder at `/Recordings/site-1` — and it is the latter that
+`sshfs` needs. Quote the whole `user@host:path` argument if the remote path
+contains spaces or accented characters; the mount hides them from the generated
+HTML, so local mountpoint names are what end up in the audio links.
 
 Generating the spectrograms pulls every selected WAV across the link once —
 that is the slow part, and there is no way around it, since each file has to
