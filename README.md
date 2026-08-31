@@ -146,7 +146,7 @@ list of valid keys) rather than silently ignored.
 | `--img-size WxH` | `1080x720` | Full-size spectrogram image dimensions in pixels |
 | `--thumbnail-scale W:H` | `108:72` | Thumbnail dimensions in pixels; also sets the HTML `<img>` cell size |
 | `--clear` | off | Delete existing `*<label>.png` files in the output directory before generating new ones |
-| `--include-audio` | off | Embed an `<audio>` player under each thumbnail, linking back to the matching WAV in `recording_dir` |
+| `--include-audio` | off | Embed an `<audio>` player under each thumbnail, linking back to the matching WAV in `recording_dir`. Players carry `preload="none"`, so a recording is fetched only when you press play on it |
 | `--dates D1 D2 ...` | all dates | Restrict processing to specific `YYYYMMDD` dates (validated against dates actually present, using the parsed recording date regardless of filename format) |
 | `--start-date YYYYMMDD` | earliest available | First date to include; selects a contiguous range instead of an explicit list. Cannot be combined with `--dates` |
 | `--end-date YYYYMMDD` | latest available | Last date to include (inclusive). Cannot be combined with `--dates` |
@@ -229,10 +229,11 @@ be read in full to compute its spectrogram. The date/time filters
 written out — PNGs, HTML, CSS — lands locally in `--output-dir`.
 
 **Playing the audio does not require downloading it.** With `--include-audio`,
-each cell's `<audio>` element streams straight through the mount: the browser
-fetches only the recording you actually press play on, and only as far as you
-listen. Nothing is copied to local disk beyond the OS page cache. Note that
-WAV is uncompressed (an AudioMoth minute at 48 kHz is roughly 23 MB), so
+each cell's `<audio>` element streams straight through the mount, and carries
+`preload="none"` so the browser fetches only the recording you actually press
+play on, and only as far as you listen — opening the calendar itself costs no
+transfer at all. Nothing is copied to local disk beyond the OS page cache.
+Note that WAV is uncompressed (an AudioMoth minute at 48 kHz is roughly 23 MB), so
 playback is comfortable over a LAN or VPN and can stall on a slow link.
 
 Two things to watch for:
@@ -334,7 +335,11 @@ command executes these steps, in order:
    one row per time-of-day. Each cell either shows the matching thumbnail
    (named after that file's actual stem, whatever its filename convention)
    with an `<audio>` player added when `--include-audio` is set, or is left
-   blank if no recording exists for that date/time combination. The
+   blank if no recording exists for that date/time combination. Those players
+   are emitted with `preload="none"`: without it a browser reads every WAV's
+   header on page load just to show a duration, which on a large calendar (a
+   month at 15-minute spacing is ~3000 cells) stalls the page long before you
+   click anything — badly so when the recordings sit on a network mount. The
    thumbnail `src` is a plain relative filename within the output directory;
    the `<audio>` `src` is computed with `os.path.relpath` from the output
    directory back to `recording_dir`, so the two directories don't need to

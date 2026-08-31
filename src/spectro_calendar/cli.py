@@ -618,7 +618,7 @@ def generate_html(wav_files, file_dates, spec_label, rec_dir, out_dir, cell_widt
                     # Add image and player
                     f.write(f'<td><img src="{img_rel_path}" width="{cell_width}" height="{cell_height}"><br>')
                     if flag_audio:
-                        f.write(f'<audio controls><source src="{wav_rel_path}" type="audio/wav">Your browser does not support the audio element.</audio>')
+                        f.write(f'<audio controls preload="none"><source src="{wav_rel_path}" type="audio/wav">Your browser does not support the audio element.</audio>')
                     f.write('</td>')
                 else:
                     f.write("<td>&nbsp;</td>")
