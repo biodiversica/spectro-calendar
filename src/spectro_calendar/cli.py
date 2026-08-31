@@ -84,6 +84,13 @@ import yaml
 SPECTROGRAM_TABLE_CSS = """\
 html {
   box-sizing: border-box;
+  height: 100%;
+}
+body {
+  height: 100%;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
 }
 *,
 *:before,
@@ -101,9 +108,14 @@ html {
   position: relative;
   width:100%;
   z-index: 1;
-  margin: auto;
+  margin: 0 auto;
   overflow: auto;
-  height: 720px;
+  /* Fill whatever vertical space is left in the body's flex column, rather
+     than a fixed height, so the calendar uses the full window on any screen.
+     min-height:0 lets the flex item shrink below its content height, which is
+     what keeps the scrolling inside the table instead of on the page. */
+  flex: 1 1 auto;
+  min-height: 0;
 }
 .table-scroll table {
   width: 100%;
