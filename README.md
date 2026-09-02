@@ -1,5 +1,7 @@
 # spectro-calendar
 
+*[Versão em português](README.pt-BR.md)*
+
 Generate a browsable HTML "calendar" of spectrograms from a folder of `.wav`
 recordings, e.g. from an [AudioMoth](https://www.openacousticdevices.info/audiomoth)
 or any other passive acoustic recorder that embeds a timestamp in each
@@ -7,8 +9,10 @@ filename.
 
 Each recording becomes a spectrogram thumbnail placed in a table, with dates
 as columns and times-of-day as rows, so you can quickly scan weeks of
-bioacoustic monitoring data at a glance and click through to the full-size
-image (and optionally play the audio) for any cell.
+bioacoustic monitoring data at a glance (and optionally play the audio for
+any cell). A full-resolution version of every spectrogram is written next to
+its thumbnail, to be opened directly from the output directory when a cell
+needs a closer look.
 
 This can be considered as an extended adaptation of the [scripts created by Nathan Wolek](https://github.com/nwolek/audiomoth-scripts).
 
@@ -23,7 +27,52 @@ This can be considered as an extended adaptation of the [scripts created by Nath
 
 ## Installation
 
-Clone the repository first:
+### As a standalone tool
+
+If you only want to *run* spectro-calendar, `uv` can install it straight from
+GitHub as a self-contained tool — its own private virtual environment, with
+the `spectro-calendar` command on your `PATH` and no clone to maintain:
+
+```bash
+uv tool install git+https://github.com/biodiversica/spectro-calendar.git
+```
+
+The command then works from any directory, with no `uv run` prefix and
+nothing to activate:
+
+```bash
+spectro-calendar /path/to/recordings --use-ffmpeg --include-audio
+```
+
+If your shell doesn't find it afterwards, run `uv tool update-shell` once to
+add uv's tool directory to your `PATH`, then open a new shell. To upgrade to
+the latest commit, or remove it again:
+
+```bash
+uv tool upgrade spectro-calendar
+uv tool uninstall spectro-calendar
+```
+
+To try it without installing anything permanently, `uvx` runs it in a
+temporary environment that is discarded afterwards:
+
+```bash
+uvx --from git+https://github.com/biodiversica/spectro-calendar.git \
+  spectro-calendar /path/to/recordings
+```
+
+`--from` is needed because the project isn't published on PyPI, so uv has to
+be told where to fetch it from. If you've already cloned the repository, `uv
+tool install .` from inside it installs that working copy the same way (add
+`-e` to keep it editable).
+
+Either way this installs only the Python dependencies. The optional
+[`ffmpeg`](https://ffmpeg.org/) backend is a system binary — install it
+through your package manager if you want `--use-ffmpeg`.
+
+### From a clone
+
+To modify the code, or to work from a checkout, clone the repository first:
 
 ```bash
 git clone https://github.com/biodiversica/spectro-calendar.git
@@ -61,7 +110,10 @@ Python module — all are equivalent entry points into the same code,
 whichever way you installed it:
 
 ```bash
-# via uv (no separate "activate" step needed)
+# if installed with `uv tool install` (see above) -- no prefix at all
+spectro-calendar /path/to/recordings
+
+# via uv, from inside a clone (no separate "activate" step needed)
 uv run spectro-calendar /path/to/recordings
 
 # as a python module (works with either uv or a pip-installed venv)
@@ -85,7 +137,7 @@ default, or entirely inside `--output-dir` if given (in which case
 
 - `<original-name>-fullsize-<label>.png` — one full-resolution spectrogram per WAV file
 - `<original-name>-thumbnail-<label>.png` — the matching downscaled thumbnail
-- `index_<label>.html` — the calendar table linking every thumbnail
+- `index_<label>.html` — the calendar table laying out every thumbnail
 - `spectrogram-table.css` — the stylesheet used by the HTML table
 
 Open `index_<label>.html` in a browser to view the calendar. Pass
