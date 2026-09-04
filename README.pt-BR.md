@@ -128,7 +128,9 @@ python -m spectro_calendar /caminho/para/gravacoes  # com o venv do pip ativado
 ```
 
 `recording_dir` precisa conter arquivos `.wav` com data/hora embutidas no nome
-do arquivo. Por padrão a ferramenta espera a convenção do AudioMoth,
+do arquivo. Por padrão apenas o primeiro nível de `recording_dir` é varrido;
+use `--recursive` se as gravações estiverem em subpastas (veja
+[Subpastas](#subpastas) abaixo). Por padrão a ferramenta espera a convenção do AudioMoth,
 `AAAAMMDD_HHMMSS.WAV` (ex.: `20260315_063000.WAV`), mas isso é totalmente
 configurável via `--datetime-format` e `--filename-prefix` — veja
 [Formatos de nome de arquivo](#formatos-de-nome-de-arquivo) abaixo para
@@ -156,6 +158,33 @@ O HTML continua ligando o player `<audio>` opcional de cada miniatura ao WAV
 original em `recording_dir` por um caminho relativo, então `--include-audio`
 continua funcionando mesmo que as gravações em si não sejam copiadas para
 `--output-dir`.
+
+### Subpastas
+
+Por padrão só são considerados os arquivos `.wav` que estão diretamente em
+`recording_dir` — qualquer coisa dentro de uma subpasta é ignorada. Use
+`--recursive` para descer também pelas subpastas:
+
+```bash
+uv run spectro-calendar /dados/sitio-1/gravacoes --recursive
+```
+
+Os PNGs de cada gravação são então escritos em um subdiretório do diretório de
+saída que espelha a localização do WAV, ex.: uma gravação em
+`gravacoes/moth-a/20260304_100000.WAV` gera suas imagens em
+`calendario/moth-a/`. Isso evita que arquivos de mesmo nome em subpastas
+diferentes (uma pasta por gravador ou por instalação, por exemplo)
+sobrescrevam os espectrogramas uns dos outros. O calendário HTML e o CSS
+continuam na raiz do diretório de saída e referenciam as imagens por caminho
+relativo.
+
+Uma ressalva: o calendário tem uma única célula por data e horário do dia,
+então se duas gravações compartilham o mesmo horário — dois gravadores com a
+mesma programação, em duas subpastas — apenas uma delas pode aparecer na
+tabela. A execução imprime um aviso nomeando os dois arquivos sempre que isso
+acontece, e ainda gera os espectrogramas de todos eles, então nada se perde em
+disco. Para ver todas as gravações, rode a ferramenta uma vez por subpasta,
+cada uma com seu próprio `--output-dir`.
 
 ### Arquivo de configuração
 
@@ -210,6 +239,7 @@ lista de chaves válidas), em vez de ser silenciosamente ignorada.
 | `--time-step N` | nenhum | Mantém apenas uma gravação por intervalo de N minutos em cada dia, em vez de todas as gravações |
 | `--start-time HHMMSS` | `000000` | Início da janela diária de horários a incluir |
 | `--end-time HHMMSS` | `235900` | Fim da janela diária de horários a incluir |
+| `--recursive` | desligado | Também varre as subpastas de `recording_dir` em busca de arquivos `.wav`. Os espectrogramas de cada arquivo são escritos em uma subpasta correspondente dentro do diretório de saída (veja [Subpastas](#subpastas)) |
 | `--output-dir DIR` | `recording_dir` | Diretório para toda a saída gerada (PNGs dos espectrogramas, `index_<label>.html`, `spectrogram-table.css`); criado se não existir. Quando definido, `recording_dir` é apenas lido — nada é escrito lá. O player `<audio>` do HTML (`--include-audio`) continua apontando para o WAV original por um caminho relativo |
 | `--datetime-format FMT` | `%Y%m%d_%H%M%S` | Formato compatível com strptime descrevendo como data/hora estão embutidas em cada nome de arquivo, após remover `--filename-prefix` |
 | `--filename-prefix PREFIXO` | `""` | Prefixo literal a ser removido do nome do arquivo antes de aplicar `--datetime-format`, ex.: `SM4_` para `SM4_20260304_100000.wav` |
@@ -334,7 +364,8 @@ estas etapas, nesta ordem:
    pendurados.
 
 3. **Descoberta dos arquivos** — todo arquivo `.wav` (sem distinção de
-   maiúsculas/minúsculas) diretamente dentro de `recording_dir` é listado.
+   maiúsculas/minúsculas) diretamente dentro de `recording_dir` é listado; com
+   `--recursive`, as subpastas também são percorridas.
    `parse_recording_datetime` remove `--filename-prefix` do radical de cada
    nome e interpreta o restante com `datetime.strptime(stem, --datetime-format)`,
    construindo um mapeamento `{caminho_wav: datetime}`; qualquer nome que não

@@ -125,7 +125,9 @@ python -m spectro_calendar /path/to/recordings  # if using pip's venv, activated
 ```
 
 `recording_dir` must contain `.wav` files with a date/time embedded in their
-filename. By default the tool expects AudioMoth's convention,
+filename. Only the top level of `recording_dir` is scanned by default; pass
+`--recursive` if the recordings sit in subfolders (see
+[Subfolders](#subfolders) below). By default the tool expects AudioMoth's convention,
 `YYYYMMDD_HHMMSS.WAV` (e.g. `20260315_063000.WAV`), but this is fully
 configurable via `--datetime-format` and `--filename-prefix` — see
 [Filename formats](#filename-formats) below for recorders that use a
@@ -152,6 +154,31 @@ The HTML still links each thumbnail's optional `<audio>` player back to the
 original WAV in `recording_dir` via a relative path, so `--include-audio`
 keeps working even though the recordings themselves aren't copied into
 `--output-dir`.
+
+### Subfolders
+
+By default only `.wav` files sitting directly in `recording_dir` are picked
+up — anything inside a subfolder is ignored. Pass `--recursive` to descend
+into subfolders as well:
+
+```bash
+uv run spectro-calendar /data/site-1/recordings --recursive
+```
+
+Each recording's PNGs are then written into a subdirectory of the output
+directory mirroring where the WAV lives, e.g. a recording at
+`recordings/moth-a/20260304_100000.WAV` produces its images under
+`calendar/moth-a/`. That keeps identically named files from different
+subfolders (one folder per recorder or deployment, say) from overwriting each
+other's spectrograms. The HTML calendar and CSS stay at the top of the output
+directory and reference the images by relative path.
+
+One caveat: the calendar has a single cell per date and time of day, so if two
+recordings share the same timestamp — two recorders on the same schedule, in
+two subfolders — only one of them can appear in the table. The run prints a
+warning naming both files whenever this happens, and still generates
+spectrograms for all of them, so nothing is lost on disk. To see every
+recording, run the tool once per subfolder with its own `--output-dir`.
 
 ### Config file
 
@@ -205,6 +232,7 @@ list of valid keys) rather than silently ignored.
 | `--time-step N` | none | Keep only one recording per N-minute interval per day, instead of every recording |
 | `--start-time HHMMSS` | `000000` | Start of the daily time window to include |
 | `--end-time HHMMSS` | `235900` | End of the daily time window to include |
+| `--recursive` | off | Also scan subfolders of `recording_dir` for `.wav` files. Each file's spectrograms are written into a matching subfolder under the output directory (see [Subfolders](#subfolders)) |
 | `--output-dir DIR` | `recording_dir` | Directory for all generated output (spectrogram PNGs, `index_<label>.html`, `spectrogram-table.css`); created if it doesn't exist. When set, `recording_dir` is only read from -- nothing is written there. The HTML's `<audio>` player (`--include-audio`) still links back to the original WAV via a relative path |
 | `--datetime-format FMT` | `%Y%m%d_%H%M%S` | strptime-compatible format describing how date/time are embedded in each filename, after stripping `--filename-prefix` |
 | `--filename-prefix PREFIX` | `""` | Literal prefix to strip from the filename before parsing `--datetime-format`, e.g. `SM4_` for `SM4_20260304_100000.wav` |
@@ -323,7 +351,8 @@ command executes these steps, in order:
    from a previous run with different parameters don't linger.
 
 3. **File discovery** — every `.wav` file (case-insensitive) directly inside
-   `recording_dir` is listed. `parse_recording_datetime` strips
+   `recording_dir` is listed; with `--recursive`, its subfolders are walked
+   too. `parse_recording_datetime` strips
    `--filename-prefix` from each filename stem and parses the remainder with
    `datetime.strptime(stem, --datetime-format)`, building a
    `{wav_path: datetime}` mapping; any filename that doesn't match exits the

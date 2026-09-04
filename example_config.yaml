@@ -37,6 +37,9 @@ thumbnail_scale: "108:72"
 # Behavior flags.
 clear: false
 include_audio: true
+# Set to true to also pick up recordings inside subfolders of recording_dir;
+# their spectrograms go into matching subfolders under output_dir.
+recursive: false
 
 # Date / time filtering. Dates must be quoted so they stay strings
 # (YYYYMMDD), not YAML numbers.

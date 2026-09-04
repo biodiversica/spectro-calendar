@@ -13,7 +13,8 @@ Pipeline overview (see ``main()`` for the orchestration):
    a YAML file (see ``example_config.yaml``) whose keys become argparse
    defaults via ``parser.set_defaults``; explicit CLI flags still win over
    both the config file and the built-in defaults.
-2. **File discovery** -- all ``.wav`` files in ``recording_dir`` are listed
+2. **File discovery** -- all ``.wav`` files directly inside ``recording_dir``
+   are listed (``--recursive`` also descends into its subfolders)
    and their embedded recording date/time is parsed from each filename via
    ``parse_recording_datetime``, using ``--datetime-format`` (a strptime
    format string, default ``"%Y%m%d_%H%M%S"`` -- AudioMoth's convention) and
@@ -27,7 +28,10 @@ Pipeline overview (see ``main()`` for the orchestration):
      each N-minute interval per day.
 4. **Spectrogram generation** -- for every remaining file, a full-size PNG
    and a downscaled thumbnail PNG are generated into the output directory
-   (``--output-dir`` if given, else ``recording_dir``), using one of two
+   (``--output-dir`` if given, else ``recording_dir``); with ``--recursive``
+   each file's PNGs go into a subdirectory mirroring its location under
+   ``recording_dir`` (see ``spectrogram_output_dir``), so same-named files in
+   different subfolders don't overwrite each other. Generation uses one of two
    interchangeable backends:
    - ``spectrogram_ffmpeg`` -- shells out to ffmpeg's ``showspectrumpic``
      filter (fast, see benchmark below, but requires the ffmpeg binary).
@@ -417,6 +421,32 @@ def run(cmd):
 # Spectrogram generation using scipy
 # ------------------------
 
+def spectrogram_output_dir(wav_path, rec_dir, out_dir):
+    """
+    Resolves where a WAV file's spectrogram PNGs belong.
+
+    With ``--recursive``, recordings may live in subfolders of
+    ``recording_dir``; mirroring that structure under the output directory
+    keeps same-named files from different subfolders (a common case when one
+    folder holds one recorder/deployment) from overwriting each other's PNGs.
+
+    Args:
+        wav_path (Path): Path to the .wav file
+        rec_dir (Path): Directory the recordings were discovered under
+        out_dir (Path): Root output directory
+
+    Returns:
+        Path: ``out_dir`` itself for a file sitting directly in ``rec_dir``,
+        otherwise the matching subdirectory under ``out_dir``.
+    """
+    try:
+        rel_parent = wav_path.parent.relative_to(rec_dir)
+    except ValueError:
+        # Not under rec_dir (shouldn't happen); fall back to the root.
+        return out_dir
+    return out_dir / rel_parent
+
+
 def spectrogram_scipy(
     wav_path,
     highest_freq,
@@ -578,10 +608,21 @@ def generate_html(wav_files, file_dates, spec_label, rec_dir, out_dir, cell_widt
     # Look up each WAV file by its (date, time) key, regardless of the
     # original filename format/prefix, so the table only depends on the
     # parsed datetime, not on any specific naming convention.
-    files_by_datetime = {
-        (file_dates[w].strftime("%Y%m%d"), file_dates[w].strftime("%H%M%S")): w
-        for w in wav_files
-    }
+    files_by_datetime = {}
+    for w in wav_files:
+        key = (file_dates[w].strftime("%Y%m%d"), file_dates[w].strftime("%H%M%S"))
+        previous = files_by_datetime.get(key)
+        if previous is not None:
+            # One cell per date+time: with --recursive, two subfolders can
+            # easily hold recordings made at the same moment (e.g. two
+            # recorders on the same schedule). Only one can be shown, so say
+            # which one is dropped rather than losing it silently.
+            print(
+                f"Warning: {w} and {previous} share the recording time "
+                f"{key[0]} {key[1]}; only {previous} is shown in the calendar."
+            )
+            continue
+        files_by_datetime[key] = w
     unique_dates = sorted({key[0] for key in files_by_datetime})
     unique_times = sorted({key[1] for key in files_by_datetime})
 
@@ -607,7 +648,12 @@ def generate_html(wav_files, file_dates, spec_label, rec_dir, out_dir, cell_widt
             f.write(f"<th>{t[:2]}:{t[2:4]}</th>")
             for d in unique_dates:
                 wav_for_cell = files_by_datetime.get((d, t))
-                img = out_dir / f"{wav_for_cell.stem}-thumbnail-{spec_label}.png" if wav_for_cell else None
+                img = (
+                    spectrogram_output_dir(wav_for_cell, rec_dir, out_dir)
+                    / f"{wav_for_cell.stem}-thumbnail-{spec_label}.png"
+                    if wav_for_cell
+                    else None
+                )
 
                 if wav_for_cell is not None and img.exists():  # Check if the spectrogram image exists
                     # Use relative paths from out_dir, even when rec_dir isn't
@@ -706,6 +752,7 @@ def main():
     parser.add_argument("--time-step", default=None, type=int, help="Time step in minutes (default: all)")
     parser.add_argument("--start-time", default='000000', type=str, help="Start time of the day in HHMMSS format (e.g., '050000' for 5 AM)")
     parser.add_argument("--end-time", default='235900', type=str, help="End time of the day in HHMMSS format (e.g., '090000' for 9 AM)")
+    parser.add_argument("--recursive", action="store_true", help="Also look for .wav recordings in subfolders of recording_dir (default: only the top level). Spectrograms are written into a matching subfolder structure under the output directory.")
     parser.add_argument("--output-dir", type=Path, default=None, help="Directory to write the spectrogram images, HTML calendar, and CSS to (default: recording_dir). When set, recording_dir is only read from, never written to.")
     parser.add_argument("--datetime-format", default="%Y%m%d_%H%M%S", help="strptime-compatible format describing how date & time are embedded in each WAV filename, after stripping --filename-prefix (default: AudioMoth's '%%Y%%m%%d_%%H%%M%%S', e.g. 20260304_100000.WAV)")
     parser.add_argument("--filename-prefix", default="", help="Literal prefix before the datetime portion of the filename, e.g. 'SM4_' for SM4_20260304_100000.wav (default: none)")
@@ -736,13 +783,20 @@ def main():
     # Option to clear existing spectrograms
     if args.clear:
         print(f"Clearing existing spectrograms in {out_dir}...")
-        for file in out_dir.glob(f"*{args.spec_label}.png"):
+        clear_pattern = f"*{args.spec_label}.png"
+        existing = out_dir.rglob(clear_pattern) if args.recursive else out_dir.glob(clear_pattern)
+        for file in existing:
             file.unlink()
 
     # Get WAV files and parse their embedded recording date/time
-    all_wav_files = [p for p in rec_dir.iterdir() if p.suffix.lower() == ".wav"]
+    candidates = rec_dir.rglob("*") if args.recursive else rec_dir.iterdir()
+    all_wav_files = [p for p in candidates if p.is_file() and p.suffix.lower() == ".wav"]
     if not all_wav_files:
-        sys.exit("No WAV files found")
+        sys.exit(
+            "No WAV files found"
+            if args.recursive
+            else "No WAV files found (recordings inside subfolders are only picked up with --recursive)"
+        )
 
     try:
         file_dates = {
@@ -797,6 +851,11 @@ def main():
     if not wav_files:
         sys.exit("No WAV files found for the selected dates and time steps")
 
+    # Mirror the recordings' subfolder structure under the output directory,
+    # so files with the same name in different subfolders keep separate PNGs.
+    for w in wav_files:
+        spectrogram_output_dir(w, rec_dir, out_dir).mkdir(parents=True, exist_ok=True)
+
     use_ffmpeg = ffmpeg_available() if args.use_ffmpeg else False
     print(f"Using ffmpeg: {use_ffmpeg}")
 
@@ -805,7 +864,15 @@ def main():
             # Use ProcessPoolExecutor to process multiple files concurrently
             with concurrent.futures.ProcessPoolExecutor(max_workers=args.max_cores) as executor:
                 # Map the wav files to the process_wav_file function for parallel execution
-                futures = [executor.submit(process_wav_file_with_ffmpeg, wav, args, out_dir) for wav in wav_files]
+                futures = [
+                    executor.submit(
+                        process_wav_file_with_ffmpeg,
+                        wav,
+                        args,
+                        spectrogram_output_dir(wav, rec_dir, out_dir),
+                    )
+                    for wav in wav_files
+                ]
 
                 # Wait for all futures to complete (i.e., all spectrograms processed)
                 concurrent.futures.wait(futures)
@@ -824,14 +891,22 @@ def main():
                     args.spec_label,
                     args.img_size,
                     args.thumbnail_scale,
-                    out_dir,
+                    spectrogram_output_dir(wav, rec_dir, out_dir),
                 )
     else:
         if args.max_cores > 1:
             # Use ProcessPoolExecutor to process multiple files concurrently
             with concurrent.futures.ProcessPoolExecutor(max_workers=args.max_cores) as executor:
                 # Map the wav files to the process_wav_file function for parallel execution
-                futures = [executor.submit(process_wav_file, wav, args, out_dir) for wav in wav_files]
+                futures = [
+                    executor.submit(
+                        process_wav_file,
+                        wav,
+                        args,
+                        spectrogram_output_dir(wav, rec_dir, out_dir),
+                    )
+                    for wav in wav_files
+                ]
 
                 # Wait for all futures to complete (i.e., all spectrograms processed)
                 concurrent.futures.wait(futures)
@@ -845,7 +920,7 @@ def main():
                     args.spec_label,
                     args.img_size,
                     args.thumbnail_scale,
-                    out_dir,
+                    spectrogram_output_dir(wav, rec_dir, out_dir),
                 )
 
 
