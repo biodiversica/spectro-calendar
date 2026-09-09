@@ -64,10 +64,8 @@ scipy  |  6	        | 90.41856098175049
 
 """
 
-import argparse
 import subprocess
 import shutil
-import sys
 from pathlib import Path
 import numpy as np
 import scipy.io.wavfile as wav
@@ -79,6 +77,8 @@ from PIL import Image
 import time
 from datetime import datetime
 import yaml
+
+from .richhelp import RichHelpParser, fatal
 
 
 # ------------------------
@@ -728,7 +728,7 @@ def main():
     """
     exec_start_time = time.time()
 
-    parser = argparse.ArgumentParser(description="Generate a spectrogram calendar from WAV recordings")
+    parser = RichHelpParser(description="Generate a spectrogram calendar from WAV recordings")
     parser.add_argument("recording_dir", type=Path, nargs="?", default=None, help="Directory containing .wav recordings (required, unless set via 'recording_dir' in --config)")
     parser.add_argument("--config", type=Path, default=None, help="Path to a YAML file providing default values for any of these options (see example_config.yaml). Options passed on the command line always take precedence over the config file.")
 
@@ -754,7 +754,7 @@ def main():
     parser.add_argument("--end-time", default='235900', type=str, help="End time of the day in HHMMSS format (e.g., '090000' for 9 AM)")
     parser.add_argument("--recursive", action="store_true", help="Also look for .wav recordings in subfolders of recording_dir (default: only the top level). Spectrograms are written into a matching subfolder structure under the output directory.")
     parser.add_argument("--output-dir", type=Path, default=None, help="Directory to write the spectrogram images, HTML calendar, and CSS to (default: recording_dir). When set, recording_dir is only read from, never written to.")
-    parser.add_argument("--datetime-format", default="%Y%m%d_%H%M%S", help="strptime-compatible format describing how date & time are embedded in each WAV filename, after stripping --filename-prefix (default: AudioMoth's '%%Y%%m%%d_%%H%%M%%S', e.g. 20260304_100000.WAV)")
+    parser.add_argument("--datetime-format", default="%Y%m%d_%H%M%S", help="strptime-compatible format describing how date & time are embedded in each WAV filename, after stripping --filename-prefix (AudioMoth's convention, e.g. 20260304_100000.WAV)")
     parser.add_argument("--filename-prefix", default="", help="Literal prefix before the datetime portion of the filename, e.g. 'SM4_' for SM4_20260304_100000.wav (default: none)")
 
     # First pass: peek at --config only, so its values can be installed as
@@ -768,13 +768,13 @@ def main():
         try:
             config = load_yaml_config(config_path, valid_keys)
         except (OSError, ValueError, yaml.YAMLError) as e:
-            sys.exit(f"Failed to load config file '{config_path}': {e}")
+            fatal(f"Failed to load config file '{config_path}': {e}")
         parser.set_defaults(**config)
 
     args = parser.parse_args()
 
     if args.recording_dir is None:
-        sys.exit("recording_dir is required: pass it as a positional argument, or set 'recording_dir' in --config")
+        fatal("recording_dir is required: pass it as a positional argument, or set 'recording_dir' in --config")
 
     rec_dir = args.recording_dir.resolve()
     out_dir = args.output_dir.resolve() if args.output_dir else rec_dir
@@ -792,7 +792,7 @@ def main():
     candidates = rec_dir.rglob("*") if args.recursive else rec_dir.iterdir()
     all_wav_files = [p for p in candidates if p.is_file() and p.suffix.lower() == ".wav"]
     if not all_wav_files:
-        sys.exit(
+        fatal(
             "No WAV files found"
             if args.recursive
             else "No WAV files found (recordings inside subfolders are only picked up with --recursive)"
@@ -804,7 +804,7 @@ def main():
             for w in all_wav_files
         }
     except ValueError as e:
-        sys.exit(str(e))
+        fatal(str(e))
 
     all_wav_files = sorted(all_wav_files, key=lambda w: file_dates[w])
 
@@ -812,7 +812,7 @@ def main():
 
     # Filter dates based on user input
     if args.dates and (args.start_date or args.end_date):
-        sys.exit("--dates cannot be combined with --start-date/--end-date: use either an explicit list or a range")
+        fatal("--dates cannot be combined with --start-date/--end-date: use either an explicit list or a range")
 
     if args.dates:
         validate_dates(args.dates, available_dates)
@@ -821,9 +821,9 @@ def main():
         try:
             dates_to_process = filter_dates_by_range(available_dates, args.start_date, args.end_date)
         except ValueError as e:
-            sys.exit(str(e))
+            fatal(str(e))
         if not dates_to_process:
-            sys.exit(
+            fatal(
                 f"No recordings found in the requested date range "
                 f"({args.start_date or 'any'} to {args.end_date or 'any'}). "
                 f"Available dates: {', '.join(available_dates)}"
@@ -849,7 +849,7 @@ def main():
 
     
     if not wav_files:
-        sys.exit("No WAV files found for the selected dates and time steps")
+        fatal("No WAV files found for the selected dates and time steps")
 
     # Mirror the recordings' subfolder structure under the output directory,
     # so files with the same name in different subfolders keep separate PNGs.
