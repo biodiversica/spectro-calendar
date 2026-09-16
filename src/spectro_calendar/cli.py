@@ -45,7 +45,10 @@ Pipeline overview (see ``main()`` for the orchestration):
    rows), optionally embedding an ``<audio>`` player per cell that links
    back to the source WAV in ``recording_dir`` (``--include-audio``). A
    companion CSS file is written alongside it, both into the output
-   directory.
+   directory. With ``--annotate``, each cell also gets a checkbox and the
+   page a toolbar (``ANNOTATION_SCRIPT``) that downloads the checked
+   recordings as a plain ``.txt`` list -- the filename itself acting as the
+   annotation label.
 
 Parallel processing computation time (Lenovo ThinkPad X1 Carbon 7th generation)
 - 107 wav files of 1min (23MB each)
@@ -66,6 +69,7 @@ scipy  |  6	        | 90.41856098175049
 
 import subprocess
 import shutil
+import html
 from pathlib import Path
 import numpy as np
 import scipy.io.wavfile as wav
@@ -176,6 +180,175 @@ thead th:first-child,
 tfoot th:first-child {
   z-index: 5;
 }
+
+/* Annotation mode (--annotate): per-cell checkboxes plus the export toolbar.
+   These rules are harmless when the flag is off, since nothing uses them. */
+.annotate-bar {
+  flex: 0 0 auto;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  background: #333;
+  color: #fff;
+}
+.annotate-bar button {
+  font-family: inherit;
+  font-size: 1em;
+  padding: 4px 10px;
+  cursor: pointer;
+}
+.annotate-bar button[disabled] {
+  cursor: default;
+  opacity: 0.45;
+}
+.annotate-bar select {
+  font-family: inherit;
+  padding: 3px;
+}
+.annotate-count {
+  margin-left: auto;
+}
+.annotate-check {
+  width: 18px;
+  height: 18px;
+  margin: 4px 0 0;
+  cursor: pointer;
+  vertical-align: middle;
+}
+.table-scroll td.annotated {
+  background: #cdeeb8;
+  outline: 2px solid #3c8c1e;
+  outline-offset: -2px;
+}
+"""
+
+# ------------------------
+# Client-side annotation script (only embedded with --annotate)
+# ------------------------
+#
+# Kept inline in the generated HTML rather than in a sibling file, so the
+# calendar keeps working as a single page that can be moved or shared
+# without a second asset to remember. The checked boxes are mirrored into
+# localStorage under a key derived from the page's own path, so reloading
+# the calendar (or coming back to it the next day) doesn't throw away an
+# annotation session; the export button turns the current selection into a
+# plain .txt download, one recording per line.
+
+ANNOTATION_SCRIPT = r"""(function () {
+  var boxes = Array.prototype.slice.call(document.querySelectorAll('.annotate-check'));
+  var bar = document.querySelector('.annotate-bar');
+  var countEl = document.getElementById('annotate-count');
+  var formatEl = document.getElementById('annotate-format');
+  var exportBtn = document.getElementById('annotate-export');
+  var clearBtn = document.getElementById('annotate-clear');
+  var storageKey = 'spectro-calendar:' + window.location.pathname + ':selected';
+
+  function selected() {
+    return boxes.filter(function (box) { return box.checked; }).sort(function (a, b) {
+      var left = a.dataset.datetime + a.dataset.file;
+      var right = b.dataset.datetime + b.dataset.file;
+      return left < right ? -1 : left > right ? 1 : 0;
+    });
+  }
+
+  function markCell(box) {
+    var cell = box.closest('td');
+    if (!cell) return;
+    if (box.checked) {
+      cell.classList.add('annotated');
+    } else {
+      cell.classList.remove('annotated');
+    }
+  }
+
+  function save() {
+    // Browser storage is best-effort here: it can be unavailable (private
+    // window, blocked site data), and losing it only costs the restore.
+    try {
+      window.localStorage.setItem(storageKey, JSON.stringify(selected().map(function (box) {
+        return box.dataset.file;
+      })));
+    } catch (e) { /* ignore */ }
+  }
+
+  function restore() {
+    var stored;
+    try {
+      stored = window.localStorage.getItem(storageKey);
+    } catch (e) {
+      return;
+    }
+    if (!stored) return;
+    try {
+      var files = JSON.parse(stored);
+      if (!Array.isArray(files)) return;
+      boxes.forEach(function (box) {
+        if (files.indexOf(box.dataset.file) !== -1) box.checked = true;
+      });
+    } catch (e) { /* ignore */ }
+  }
+
+  function refresh() {
+    var count = selected().length;
+    countEl.textContent = count + (count === 1 ? ' recording selected' : ' recordings selected');
+    exportBtn.disabled = count === 0;
+    clearBtn.disabled = count === 0;
+  }
+
+  function exportLines() {
+    var format = formatEl.value;
+    return selected().map(function (box) {
+      if (format === 'datetime') return box.dataset.datetime;
+      if (format === 'both') return box.dataset.file + '\t' + box.dataset.datetime;
+      return box.dataset.file;
+    });
+  }
+
+  function stamp() {
+    var now = new Date();
+    function pad(n) { return (n < 10 ? '0' : '') + n; }
+    return String(now.getFullYear()) + pad(now.getMonth() + 1) + pad(now.getDate()) +
+      '-' + pad(now.getHours()) + pad(now.getMinutes()) + pad(now.getSeconds());
+  }
+
+  boxes.forEach(function (box) {
+    box.addEventListener('change', function () {
+      markCell(box);
+      save();
+      refresh();
+    });
+  });
+
+  exportBtn.addEventListener('click', function () {
+    var lines = exportLines();
+    if (!lines.length) return;
+    var blob = new Blob([lines.join('\n') + '\n'], { type: 'text/plain;charset=utf-8' });
+    var url = URL.createObjectURL(blob);
+    var link = document.createElement('a');
+    link.href = url;
+    link.download = (bar.dataset.exportName || 'annotations') + '_' + stamp() + '.txt';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  });
+
+  clearBtn.addEventListener('click', function () {
+    if (!window.confirm('Clear all ' + selected().length + ' selected recordings?')) return;
+    boxes.forEach(function (box) {
+      box.checked = false;
+      markCell(box);
+    });
+    save();
+    refresh();
+  });
+
+  restore();
+  boxes.forEach(markCell);
+  refresh();
+})();
 """
 
 # ------------------------
@@ -592,7 +765,7 @@ def spectrogram_ffmpeg(
 # HTML generation (creating the table)
 # ------------------------
 
-def generate_html(wav_files, file_dates, spec_label, rec_dir, out_dir, cell_width, cell_height, flag_audio=False):
+def generate_html(wav_files, file_dates, spec_label, rec_dir, out_dir, cell_width, cell_height, flag_audio=False, flag_annotate=False):
     """
     Generates an HTML table to display spectrograms.
 
@@ -604,6 +777,10 @@ def generate_html(wav_files, file_dates, spec_label, rec_dir, out_dir, cell_widt
             only used to link an optional <audio> player back to the original WAV)
         out_dir (Path): Directory the HTML/CSS and spectrogram images live in
             (may differ from rec_dir, e.g. when --output-dir is used)
+        flag_audio (bool): Embed an <audio> player under each thumbnail
+        flag_annotate (bool): Turn the calendar into a lightweight annotation
+            tool -- a checkbox under each thumbnail plus a toolbar that
+            exports the checked recordings as a plain .txt list
     """
     # Look up each WAV file by its (date, time) key, regardless of the
     # original filename format/prefix, so the table only depends on the
@@ -631,6 +808,23 @@ def generate_html(wav_files, file_dates, spec_label, rec_dir, out_dir, cell_widt
         f.write("<!DOCTYPE html>\n<html>\n<head>\n")
         f.write('<link rel="stylesheet" type="text/css" href="spectrogram-table.css">\n')
         f.write("</head>\n<body>\n")
+
+        if flag_annotate:
+            # Toolbar first in the body's flex column, so it stays on screen
+            # while the table below it scrolls. The export basename travels as
+            # a data attribute, keeping ANNOTATION_SCRIPT a static constant.
+            export_name = f"annotations_{spec_label}" if spec_label else "annotations"
+            f.write(f'<div class="annotate-bar" data-export-name="{html.escape(export_name, quote=True)}">\n')
+            f.write('<button type="button" id="annotate-export" disabled>Export selection (.txt)</button>\n')
+            f.write('<label for="annotate-format">as</label>\n')
+            f.write('<select id="annotate-format">\n')
+            f.write('<option value="file">filename</option>\n')
+            f.write('<option value="datetime">date &amp; time</option>\n')
+            f.write('<option value="both">filename + date &amp; time</option>\n')
+            f.write('</select>\n')
+            f.write('<button type="button" id="annotate-clear" disabled>Clear selection</button>\n')
+            f.write('<span class="annotate-count" id="annotate-count">0 recordings selected</span>\n')
+            f.write('</div>\n')
 
         f.write('<div id="table-scroll" class="table-scroll">\n')
         f.write('<table id="main-table" class="main-table">\n')
@@ -661,16 +855,32 @@ def generate_html(wav_files, file_dates, spec_label, rec_dir, out_dir, cell_widt
                     img_rel_path = os.path.relpath(img, out_dir)
                     wav_rel_path = os.path.relpath(wav_for_cell, out_dir)
 
-                    # Add image and player
+                    # Add image, player and annotation checkbox
                     f.write(f'<td><img src="{img_rel_path}" width="{cell_width}" height="{cell_height}"><br>')
                     if flag_audio:
                         f.write(f'<audio controls preload="none"><source src="{wav_rel_path}" type="audio/wav">Your browser does not support the audio element.</audio>')
+                    if flag_annotate:
+                        # The exported label is the recording's path relative to
+                        # rec_dir: just the filename in the flat case, but
+                        # subfolder-qualified with --recursive, where the same
+                        # filename can occur once per recorder.
+                        label = Path(os.path.relpath(wav_for_cell, rec_dir)).as_posix()
+                        stamp = file_dates[wav_for_cell].strftime("%Y-%m-%d %H:%M:%S")
+                        f.write(
+                            f'<br><input type="checkbox" class="annotate-check" '
+                            f'data-file="{html.escape(label, quote=True)}" '
+                            f'data-datetime="{stamp}" '
+                            f'title="{html.escape(label, quote=True)}" '
+                            f'aria-label="Select {html.escape(label, quote=True)}">'
+                        )
                     f.write('</td>')
                 else:
                     f.write("<td>&nbsp;</td>")
             f.write("</tr>\n")
 
         f.write("</tbody></table></div>\n")
+        if flag_annotate:
+            f.write(f"<script>\n{ANNOTATION_SCRIPT}</script>\n")
         f.write("</body></html>\n")
 
     print("index.html generated")
@@ -746,6 +956,7 @@ def main():
     parser.add_argument("--max-cores", type=int, default=4, help="Maximum number of cores in parallel processing")
     parser.add_argument("--clear", action="store_true", help="Clear existing spectrograms before creating new ones")
     parser.add_argument("--include-audio", action="store_true", help="Include audio player below each spectrogram image")
+    parser.add_argument("--annotate", action="store_true", help="Annotation mode: add a checkbox below each spectrogram and a toolbar to export the checked recordings as a .txt list (filename and/or date & time, one per line)")
     parser.add_argument("--dates", nargs='*', default=None, help="Specify specific dates in the format YYYYMMDD (default: all)")
     parser.add_argument("--start-date", default=None, type=str, help="First date to include, in YYYYMMDD format (default: earliest available). Cannot be combined with --dates")
     parser.add_argument("--end-date", default=None, type=str, help="Last date to include, in YYYYMMDD format (default: latest available). Cannot be combined with --dates")
@@ -925,7 +1136,7 @@ def main():
 
 
     cell_size = args.thumbnail_scale.split(':')
-    generate_html(wav_files, file_dates, args.spec_label, rec_dir, out_dir, cell_width=cell_size[0], cell_height=cell_size[1], flag_audio=args.include_audio)
+    generate_html(wav_files, file_dates, args.spec_label, rec_dir, out_dir, cell_width=cell_size[0], cell_height=cell_size[1], flag_audio=args.include_audio, flag_annotate=args.annotate)
 
     # Create and write the CSS file
     css_path = out_dir / "spectrogram-table.css"

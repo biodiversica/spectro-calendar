@@ -143,7 +143,7 @@ inteiramente dentro de `--output-dir` se informado (caso em que `recording_dir`
 
 - `<nome-original>-fullsize-<label>.png` — um espectrograma em resolução completa por arquivo WAV
 - `<nome-original>-thumbnail-<label>.png` — a miniatura correspondente, reduzida
-- `index_<label>.html` — a tabela do calendário que dispõe todas as miniaturas
+- `index_<label>.html` — a tabela do calendário que dispõe todas as miniaturas (com caixas de seleção por célula e uma barra de exportação quando `--annotate` está ativo)
 - `spectrogram-table.css` — a folha de estilo usada pela tabela HTML
 
 Abra `index_<label>.html` em um navegador para ver o calendário. Use
@@ -233,6 +233,7 @@ lista de chaves válidas), em vez de ser silenciosamente ignorada.
 | `--thumbnail-scale L:A` | `108:72` | Dimensões da miniatura, em pixels; define também o tamanho da célula `<img>` no HTML |
 | `--clear` | desligado | Apaga os arquivos `*<label>.png` existentes no diretório de saída antes de gerar os novos |
 | `--include-audio` | desligado | Insere um player `<audio>` sob cada miniatura, apontando para o WAV correspondente em `recording_dir`. Os players usam `preload="none"`, então uma gravação só é buscada quando você aperta play nela |
+| `--annotate` | desligado | Modo de anotação: acrescenta uma caixa de seleção sob cada miniatura e uma barra que exporta as gravações marcadas como uma lista `.txt` (veja [Modo de anotação](#modo-de-anotação)) |
 | `--dates D1 D2 ...` | todas as datas | Restringe o processamento a datas `AAAAMMDD` específicas (validadas contra as datas realmente presentes, usando a data lida da gravação, qualquer que seja o formato do nome do arquivo) |
 | `--start-date AAAAMMDD` | data mais antiga disponível | Primeira data a incluir; seleciona um intervalo contíguo em vez de uma lista explícita. Não pode ser combinada com `--dates` |
 | `--end-date AAAAMMDD` | data mais recente disponível | Última data a incluir (inclusive). Não pode ser combinada com `--dates` |
@@ -253,6 +254,49 @@ uv run spectro-calendar /dados/sitio-1 \
   --spec-label lf --highest-freq 2000 \
   --time-step 30 --start-time 050000 --end-time 090000
 ```
+
+### Modo de anotação
+
+`--annotate` transforma o calendário em uma ferramenta simples de anotação:
+cada célula ganha uma caixa de seleção sob a miniatura, e uma barra no topo
+da página exporta o que estiver marcado como um arquivo de texto simples.
+
+```bash
+uv run spectro-calendar /dados/sitio-1 --include-audio --annotate
+```
+
+Percorra (e escute) o calendário, marque as gravações que interessam e
+aperte **Export selection (.txt)**. Não há rótulo a digitar — a lista
+exportada *é* o rótulo: cada linha identifica uma gravação selecionada, e o
+seletor ao lado do botão escolhe o que vai nela:
+
+| Formato | Uma linha fica assim |
+|---|---|
+| `filename` (padrão) | `20260304_100000.WAV` |
+| `date & time` | `2026-03-04 10:00:00` |
+| `filename + date & time` | `20260304_100000.WAV<TAB>2026-03-04 10:00:00` |
+
+As linhas saem em ordem cronológica, e o download recebe o nome
+`annotations_<label>_<AAAAMMDD-HHMMSS>.txt` (o carimbo de tempo é o do
+momento da exportação, então passagens sucessivas não sobrescrevem umas às
+outras). Com `--recursive`, o nome do arquivo vem qualificado pela subpasta
+de origem (`moth-a/20260304_100000.WAV`), já que o mesmo nome pode aparecer
+uma vez por gravador. Rode a ferramenta uma vez por banda (`--spec-label lf`,
+`hf`, ...) e cada calendário exporta com seu próprio nome.
+
+As células marcadas ficam destacadas, a barra mantém a contagem atualizada e
+**Clear selection** desmarca tudo de uma vez (com confirmação). A seleção
+também é lembrada no armazenamento local do navegador, associada ao caminho
+da própria página, de modo que recarregar o calendário — ou voltar a ele
+amanhã — retoma de onde você parou em vez de começar de uma folha em branco.
+
+Uma ressalva sobre essa memória: o Chrome nega armazenamento local a páginas
+abertas diretamente do disco (`file://`), então ali a seleção dura apenas
+enquanto a aba estiver aberta, e exportar antes de fechá-la é o jeito de não
+perder o trabalho. O Firefox permite, e servir o diretório de saída por HTTP
+(veja [`scripts/serve_calendars.py`](scripts/serve_calendars.py)) faz
+funcionar em qualquer navegador. Todo o resto, inclusive a exportação em si,
+funciona normalmente a partir de `file://` nos dois navegadores.
 
 ### Formatos de nome de arquivo
 
@@ -442,6 +486,18 @@ estas etapas, nesta ordem:
    diretório de saída; o `src` do `<audio>` é calculado com `os.path.relpath`
    do diretório de saída de volta para `recording_dir`, de modo que os dois
    diretórios não precisam estar aninhados um no outro.
+
+   Com `--annotate`, cada uma dessas células leva também uma caixa de seleção
+   marcada com o caminho da gravação relativo a `recording_dir` e seu
+   timestamp já interpretado, e a página ganha uma barra de ferramentas mais o
+   handler `ANNOTATION_SCRIPT` embutido no fim do body (embutido em vez de um
+   arquivo `.js` ao lado, para que o calendário continue sendo uma página que
+   pode ser movida ou compartilhada sozinha). O script é JavaScript puro e
+   autossuficiente: monta o texto da exportação a partir desses atributos de
+   dados e o entrega ao navegador como um download `Blob`, e espelha o
+   conjunto marcado no `localStorage` — com todo acesso ao armazenamento
+   envolvido em `try`/`catch`, já que uma página `file://` no Chrome tem o
+   acesso negado e precisa continuar funcionando mesmo assim.
 
 9. **Style sheet** — o CSS embutido em `SPECTROGRAM_TABLE_CSS` é escrito
    como `spectrogram-table.css` ao lado do arquivo HTML, no mesmo destino

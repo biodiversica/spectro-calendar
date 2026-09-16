@@ -139,7 +139,7 @@ default, or entirely inside `--output-dir` if given (in which case
 
 - `<original-name>-fullsize-<label>.png` — one full-resolution spectrogram per WAV file
 - `<original-name>-thumbnail-<label>.png` — the matching downscaled thumbnail
-- `index_<label>.html` — the calendar table laying out every thumbnail
+- `index_<label>.html` — the calendar table laying out every thumbnail (with per-cell checkboxes and an export toolbar when `--annotate` is set)
 - `spectrogram-table.css` — the stylesheet used by the HTML table
 
 Open `index_<label>.html` in a browser to view the calendar. Pass
@@ -226,6 +226,7 @@ list of valid keys) rather than silently ignored.
 | `--thumbnail-scale W:H` | `108:72` | Thumbnail dimensions in pixels; also sets the HTML `<img>` cell size |
 | `--clear` | off | Delete existing `*<label>.png` files in the output directory before generating new ones |
 | `--include-audio` | off | Embed an `<audio>` player under each thumbnail, linking back to the matching WAV in `recording_dir`. Players carry `preload="none"`, so a recording is fetched only when you press play on it |
+| `--annotate` | off | Annotation mode: add a checkbox under each thumbnail and a toolbar that exports the checked recordings as a `.txt` list (see [Annotation mode](#annotation-mode)) |
 | `--dates D1 D2 ...` | all dates | Restrict processing to specific `YYYYMMDD` dates (validated against dates actually present, using the parsed recording date regardless of filename format) |
 | `--start-date YYYYMMDD` | earliest available | First date to include; selects a contiguous range instead of an explicit list. Cannot be combined with `--dates` |
 | `--end-date YYYYMMDD` | latest available | Last date to include (inclusive). Cannot be combined with `--dates` |
@@ -246,6 +247,49 @@ uv run spectro-calendar /data/site-1 \
   --spec-label lf --highest-freq 2000 \
   --time-step 30 --start-time 050000 --end-time 090000
 ```
+
+### Annotation mode
+
+`--annotate` turns the calendar into a lightweight annotation tool: every
+cell gets a checkbox under its thumbnail, and a toolbar at the top of the
+page exports whatever is checked as a plain text file.
+
+```bash
+uv run spectro-calendar /data/site-1 --include-audio --annotate
+```
+
+Scan (and listen to) the calendar, tick the recordings worth keeping, then
+press **Export selection (.txt)**. There is no label to type — the exported
+list *is* the label: each line identifies one selected recording, and the
+dropdown next to the button chooses what goes on it:
+
+| Format | A line looks like |
+|---|---|
+| `filename` (default) | `20260304_100000.WAV` |
+| `date & time` | `2026-03-04 10:00:00` |
+| `filename + date & time` | `20260304_100000.WAV<TAB>2026-03-04 10:00:00` |
+
+Lines come out in chronological order, and the download is named
+`annotations_<label>_<YYYYMMDD-HHMMSS>.txt` (the timestamp is when you
+exported, so successive passes don't overwrite each other). With
+`--recursive`, the filename is qualified by the subfolder it came from
+(`moth-a/20260304_100000.WAV`), since the same name can occur once per
+recorder. Run the tool once per band (`--spec-label lf`, `hf`, ...) and each
+calendar exports under its own name.
+
+Checked cells are highlighted, the toolbar keeps a running count, and
+**Clear selection** unticks everything at once (with a confirmation). The
+selection is also remembered in the browser's local storage, keyed by the
+page's own path, so reloading the calendar — or coming back to it tomorrow —
+resumes where you left off rather than starting from an empty sheet.
+
+One caveat about that memory: Chrome refuses local storage to pages opened
+straight from disk (`file://`), so there the selection lasts only as long as
+the tab, and exporting before closing it is the way to keep the work.
+Firefox allows it, and serving the output directory over HTTP (see
+[`scripts/serve_calendars.py`](scripts/serve_calendars.py)) makes it work
+everywhere. Everything else, including the export itself, works fine from
+`file://` in either browser.
 
 ### Filename formats
 
@@ -425,6 +469,17 @@ command executes these steps, in order:
    the `<audio>` `src` is computed with `os.path.relpath` from the output
    directory back to `recording_dir`, so the two directories don't need to
    be nested inside one another.
+
+   With `--annotate`, each of those cells also carries a checkbox tagged with
+   the recording's path relative to `recording_dir` and its parsed timestamp,
+   and the page gets a toolbar plus the `ANNOTATION_SCRIPT` handler inlined
+   at the end of the body (inline rather than a sibling `.js` file, so the
+   calendar stays a page that can be moved or shared on its own). The script
+   is self-contained vanilla JavaScript: it builds the export text from those
+   data attributes and hands it to the browser as a `Blob` download, and
+   mirrors the checked set into `localStorage` — every storage access wrapped
+   in `try`/`catch`, since a `file://` page in Chrome is refused access and
+   must keep working anyway.
 
 9. **Stylesheet** — the CSS embedded in `SPECTROGRAM_TABLE_CSS` is written
    out as `spectrogram-table.css` next to the HTML file, in the same
