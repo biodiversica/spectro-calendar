@@ -278,6 +278,14 @@ exported, so successive passes don't overwrite each other). With
 recorder. Run the tool once per band (`--spec-label lf`, `hf`, ...) and each
 calendar exports under its own name.
 
+To select many recordings at once, click one checkbox and then **Shift+click**
+another: every checkbox in the rectangle they span is set the same way, i.e.
+the times between the two rows on each date between the two columns. Clicking
+01 Mar 05:00 and then Shift+clicking 03 Mar 07:00 selects 05:00–07:00 on each
+of 1, 2 and 3 March. The boxes take the new state of the Shift+clicked one, so
+the same gesture over ticked boxes clears the range, and each Shift+click
+becomes the starting corner of the next.
+
 Checked cells are highlighted, the toolbar keeps a running count, and
 **Clear selection** unticks everything at once (with a confirmation). The
 selection is also remembered in the browser's local storage, keyed by the
@@ -479,8 +487,9 @@ command executes these steps, in order:
    at the end of the body (inline rather than a sibling `.js` file, so the
    calendar stays a page that can be moved or shared on its own). The script
    is self-contained vanilla JavaScript: it builds the export text from those
-   data attributes and hands it to the browser as a `Blob` download, and
-   mirrors the checked set into `localStorage` — every storage access wrapped
+   data attributes and hands it to the browser as a `Blob` download, applies
+   Shift+click ranges using each checkbox's table row and column
+   (`rowIndex`/`cellIndex`), and mirrors the checked set into `localStorage` — every storage access wrapped
    in `try`/`catch`, since a `file://` page in Chrome is refused access and
    must keep working anyway.
 

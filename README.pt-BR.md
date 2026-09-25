@@ -285,6 +285,15 @@ de origem (`moth-a/20260304_100000.WAV`), já que o mesmo nome pode aparecer
 uma vez por gravador. Rode a ferramenta uma vez por banda (`--spec-label lf`,
 `hf`, ...) e cada calendário exporta com seu próprio nome.
 
+Para selecionar muitas gravações de uma vez, clique em uma caixa de seleção e
+depois dê **Shift+clique** em outra: todas as caixas no retângulo formado por
+elas recebem o mesmo estado, ou seja, os horários entre as duas linhas em cada
+data entre as duas colunas. Clicar em 01 mar 05:00 e depois dar Shift+clique em
+03 mar 07:00 seleciona 05:00–07:00 em cada um dos dias 1, 2 e 3 de março. As
+caixas assumem o novo estado da que recebeu o Shift+clique, então o mesmo gesto
+sobre caixas marcadas limpa o intervalo, e cada Shift+clique vira o canto
+inicial do próximo.
+
 As células marcadas ficam destacadas, a barra mantém a contagem atualizada e
 **Clear selection** desmarca tudo de uma vez (com confirmação). A seleção
 também é lembrada no armazenamento local do navegador, associada ao caminho
@@ -497,7 +506,9 @@ estas etapas, nesta ordem:
    arquivo `.js` ao lado, para que o calendário continue sendo uma página que
    pode ser movida ou compartilhada sozinha). O script é JavaScript puro e
    autossuficiente: monta o texto da exportação a partir desses atributos de
-   dados e o entrega ao navegador como um download `Blob`, e espelha o
+   dados e o entrega ao navegador como um download `Blob`, aplica os
+   intervalos de Shift+clique usando a linha e a coluna de cada caixa na
+   tabela (`rowIndex`/`cellIndex`), e espelha o
    conjunto marcado no `localStorage` — com todo acesso ao armazenamento
    envolvido em `try`/`catch`, já que uma página `file://` no Chrome tem o
    acesso negado e precisa continuar funcionando mesmo assim.

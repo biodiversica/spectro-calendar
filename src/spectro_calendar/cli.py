@@ -209,6 +209,9 @@ tfoot th:first-child {
   font-family: inherit;
   padding: 3px;
 }
+.annotate-hint {
+  opacity: 0.7;
+}
 .annotate-count {
   margin-left: auto;
 }
@@ -246,6 +249,7 @@ ANNOTATION_SCRIPT = r"""(function () {
   var exportBtn = document.getElementById('annotate-export');
   var clearBtn = document.getElementById('annotate-clear');
   var storageKey = 'spectro-calendar:' + window.location.pathname + ':selected';
+  var anchor = null;  // last clicked box, one corner of a Shift+click range
 
   function selected() {
     return boxes.filter(function (box) { return box.checked; }).sort(function (a, b) {
@@ -315,7 +319,34 @@ ANNOTATION_SCRIPT = r"""(function () {
       '-' + pad(now.getHours()) + pad(now.getMinutes()) + pad(now.getSeconds());
   }
 
+  // Shift+click applies the clicked box's new state to every box in the
+  // rectangle spanned by it and the anchor: the dates between their two
+  // columns, times between their two rows.
+  function selectRange(from, to) {
+    var fromCell = from.closest('td'), toCell = to.closest('td');
+    var rowMin = Math.min(fromCell.parentNode.rowIndex, toCell.parentNode.rowIndex);
+    var rowMax = Math.max(fromCell.parentNode.rowIndex, toCell.parentNode.rowIndex);
+    var colMin = Math.min(fromCell.cellIndex, toCell.cellIndex);
+    var colMax = Math.max(fromCell.cellIndex, toCell.cellIndex);
+    boxes.forEach(function (box) {
+      var cell = box.closest('td');
+      var row = cell.parentNode.rowIndex, col = cell.cellIndex;
+      if (row >= rowMin && row <= rowMax && col >= colMin && col <= colMax) {
+        box.checked = to.checked;
+        markCell(box);
+      }
+    });
+  }
+
   boxes.forEach(function (box) {
+    box.addEventListener('click', function (event) {
+      if (event.shiftKey && anchor && anchor !== box) {
+        selectRange(anchor, box);
+        // Shift+click also extends the page's text selection; drop it.
+        window.getSelection().removeAllRanges();
+      }
+      anchor = box;
+    });
     box.addEventListener('change', function () {
       markCell(box);
       save();
@@ -848,6 +879,7 @@ def generate_html(wav_files, file_dates, spec_label, rec_dir, out_dir, cell_widt
             f.write('<option value="both">filename + date &amp; time</option>\n')
             f.write('</select>\n')
             f.write('<button type="button" id="annotate-clear" disabled>Clear selection</button>\n')
+            f.write('<span class="annotate-hint">Shift+click a second box to select the range between them</span>\n')
             f.write('<span class="annotate-count" id="annotate-count">0 recordings selected</span>\n')
             f.write('</div>\n')
 
