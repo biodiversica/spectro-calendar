@@ -26,8 +26,9 @@ Pipeline overview (see ``main()`` for the orchestration):
    - a daily ``--start-time``/``--end-time`` window,
    - an optional ``--time-step`` that keeps only the first recording at/after
      each N-minute interval per day.
-4. **Spectrogram generation** -- for every remaining file, a full-size PNG
-   and a downscaled thumbnail PNG are generated into the output directory
+4. **Spectrogram generation** -- for every remaining file, a thumbnail PNG
+   (plus, with ``--save-fullsize``, the full-size PNG it is downscaled from)
+   is generated into the output directory
    (``--output-dir`` if given, else ``recording_dir``); with ``--recursive``
    each file's PNGs go into a subdirectory mirroring its location under
    ``recording_dir`` (see ``spectrogram_output_dir``), so same-named files in
@@ -70,6 +71,7 @@ scipy  |  6	        | 90.41856098175049
 import subprocess
 import shutil
 import html
+import io
 from pathlib import Path
 import numpy as np
 import scipy.io.wavfile as wav
@@ -628,6 +630,7 @@ def spectrogram_scipy(
     img_size,
     thumbnail_scale,
     out_dir,
+    save_fullsize=False,
 ):
     """
     Generates spectrogram images using scipy.
@@ -640,6 +643,8 @@ def spectrogram_scipy(
         img_size (str): Image size for spectrogram (width x height, e.g. "1920x240")
         thumbnail_scale (str): Thumbnail image dimensions (e.g., "192:24")
         out_dir (Path): Directory the full-size/thumbnail PNGs are written to
+        save_fullsize (bool): Also keep the full-size PNG on disk; otherwise
+            it is only rendered in memory to be downscaled into the thumbnail
     """
 
     # Read the audio file using scipy
@@ -669,15 +674,17 @@ def spectrogram_scipy(
     plt.xlabel('Time [s]')
     plt.axis("off")
 
-    # Save the full-size spectrogram image
+    # Render the full-size spectrogram image, to disk only if requested
     base = wav_path.stem
-    full_img = out_dir / f"{base}-fullsize-{spec_label}.png"
+    full_img = out_dir / f"{base}-fullsize-{spec_label}.png" if save_fullsize else io.BytesIO()
     thumb_img = out_dir / f"{base}-thumbnail-{spec_label}.png"
-    plt.savefig(full_img, bbox_inches="tight", pad_inches=0)
+    plt.savefig(full_img, format="png", bbox_inches="tight", pad_inches=0)
     plt.close()
 
     # Generate thumbnail by resizing the full-size spectrogram image
     tw, th = [int(x) for x in thumbnail_scale.split(":")]
+    if not save_fullsize:
+        full_img.seek(0)
     img = Image.open(full_img)
     img = img.resize((tw, th))
     img.save(thumb_img)
@@ -702,9 +709,10 @@ def spectrogram_ffmpeg(
     img_size,
     thumbnail_scale,
     out_dir,
+    save_fullsize=False,
 ):
     """
-    Generates spectrogram images (full-size and thumbnail) using ffmpeg.
+    Generates spectrogram images (thumbnail, plus optionally full-size) using ffmpeg.
 
     Args:
         wav_path (Path): Path to the .wav file
@@ -718,14 +726,42 @@ def spectrogram_ffmpeg(
         img_size (str): Image size for spectrogram (width x height, e.g. "1920x240")
         thumbnail_scale (str): Thumbnail image dimensions (e.g., "192:24")
         out_dir (Path): Directory the full-size/thumbnail PNGs are written to
+        save_fullsize (bool): Also keep the full-size PNG on disk; otherwise
+            it is only rendered inside ffmpeg's filter graph
     """
     base = wav_path.stem
     full_img = out_dir / f"{base}-fullsize-{spec_label}.png"
     thumb_img = out_dir / f"{base}-thumbnail-{spec_label}.png"
 
-    # Skip if spectrogram already exists
-    if full_img.exists() and thumb_img.exists():
+    # Skip if the requested spectrogram images already exist
+    if thumb_img.exists() and (full_img.exists() or not save_fullsize):
         print(f"Spectrogram for {wav_path.name} already exists. Skipping...")
+        return
+
+    spectrum_filter = (
+        f"showspectrumpic="
+        f"s={img_size}:"
+        f"stop={highest_freq}:"
+        f"start={lowest_freq}:"
+        f"scale={gain_scale}:"
+        f"fscale={freq_scale}:"
+        f"color={color_choice}:"
+        f"gain={gain}:"
+        f"legend=disable"
+    )
+
+    if not save_fullsize:
+        print(f"making thumbnail spectrogram for {wav_path.name}...")
+
+        # Render and downscale in a single filter graph, so the full-size
+        # image never touches the disk
+        run([
+            "ffmpeg",
+            "-i", str(wav_path),
+            "-lavfi", f"{spectrum_filter},scale={thumbnail_scale}",
+            "-v", "quiet",
+            str(thumb_img)
+        ])
         return
 
     print(f"making fullsize spectrogram for {wav_path.name}...")
@@ -734,18 +770,7 @@ def spectrogram_ffmpeg(
     run([
         "ffmpeg",
         "-i", str(wav_path),
-        "-lavfi",
-        (
-            f"showspectrumpic="
-            f"s={img_size}:"
-            f"stop={highest_freq}:"
-            f"start={lowest_freq}:"
-            f"scale={gain_scale}:"
-            f"fscale={freq_scale}:"
-            f"color={color_choice}:"
-            f"gain={gain}:"
-            f"legend=disable"
-        ),
+        "-lavfi", spectrum_filter,
         "-v", "quiet",
         str(full_img)
     ])
@@ -902,6 +927,7 @@ def process_wav_file(wav, args, out_dir):
         args.img_size,
         args.thumbnail_scale,
         out_dir,
+        args.save_fullsize,
     )
 
 # ------------------------
@@ -925,6 +951,7 @@ def process_wav_file_with_ffmpeg(wav, args, out_dir):
                     args.img_size,
                     args.thumbnail_scale,
                     out_dir,
+                    args.save_fullsize,
                 )
 
 # ------------------------
@@ -952,6 +979,7 @@ def main():
     parser.add_argument("--spec-label", default="", help="Spectrogram label (default: None)")
     parser.add_argument("--img-size", default="1080x720", help="Image size for spectrogram (width x height)")
     parser.add_argument("--thumbnail-scale", default="108:72", help="Thumbnail image dimensions (e.g., '108:72')")
+    parser.add_argument("--save-fullsize", action="store_true", help="Also save the full-size spectrogram PNG (--img-size) next to each thumbnail (default: only thumbnails are written; the full-size image is rendered just to be downscaled)")
     parser.add_argument("--use-ffmpeg", action="store_true", help="Use ffmpeg (if available) instead of scipy to compute spectrogram")
     parser.add_argument("--max-cores", type=int, default=4, help="Maximum number of cores in parallel processing")
     parser.add_argument("--clear", action="store_true", help="Clear existing spectrograms before creating new ones")
@@ -1103,6 +1131,7 @@ def main():
                     args.img_size,
                     args.thumbnail_scale,
                     spectrogram_output_dir(wav, rec_dir, out_dir),
+                    args.save_fullsize,
                 )
     else:
         if args.max_cores > 1:
@@ -1132,6 +1161,7 @@ def main():
                     args.img_size,
                     args.thumbnail_scale,
                     spectrogram_output_dir(wav, rec_dir, out_dir),
+                    args.save_fullsize,
                 )
 
 

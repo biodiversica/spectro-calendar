@@ -10,10 +10,10 @@ data/hora no nome de cada arquivo.
 Cada gravação vira uma miniatura de espectrograma posicionada em uma tabela,
 com datas nas colunas e horários do dia nas linhas, de modo que é possível
 percorrer semanas de dados de monitoramento bioacústico rapidamente (e,
-opcionalmente, reproduzir o áudio de qualquer célula). Uma versão em resolução
-completa de cada espectrograma é gravada ao lado da sua miniatura, para ser
-aberta diretamente do diretório de saída quando alguma célula precisar de um
-olhar mais atento.
+opcionalmente, reproduzir o áudio de qualquer célula). Com `--save-fullsize`,
+uma versão em resolução completa de cada espectrograma também é gravada ao lado
+da sua miniatura, para ser aberta diretamente do diretório de saída quando
+alguma célula precisar de um olhar mais atento.
 
 Isto pode ser considerado uma adaptação estendida dos [scripts criados por Nathan Wolek](https://github.com/nwolek/audiomoth-scripts).
 
@@ -141,8 +141,8 @@ Executar o comando produz o seguinte, dentro de `recording_dir` por padrão, ou
 inteiramente dentro de `--output-dir` se informado (caso em que `recording_dir`
 é apenas lido, nunca escrito):
 
-- `<nome-original>-fullsize-<label>.png` — um espectrograma em resolução completa por arquivo WAV
-- `<nome-original>-thumbnail-<label>.png` — a miniatura correspondente, reduzida
+- `<nome-original>-thumbnail-<label>.png` — uma miniatura reduzida do espectrograma por arquivo WAV
+- `<nome-original>-fullsize-<label>.png` — o espectrograma correspondente em resolução completa (apenas com `--save-fullsize`)
 - `index_<label>.html` — a tabela do calendário que dispõe todas as miniaturas (com caixas de seleção por célula e uma barra de exportação quando `--annotate` está ativo)
 - `spectrogram-table.css` — a folha de estilo usada pela tabela HTML
 
@@ -229,8 +229,9 @@ lista de chaves válidas), em vez de ser silenciosamente ignorada.
 | `--freq-scale` | `lin` | Escala do eixo de frequência, `lin` ou `log` (apenas backend ffmpeg) |
 | `--color-choice` | `plasma` | Paleta de cores (backend ffmpeg; o backend scipy é fixo em `plasma`) |
 | `--spec-label` | `""` | Sufixo usado para distinguir os nomes dos arquivos de saída, ex.: gerar as bandas `lf`/`hf` no mesmo diretório sem colisões |
-| `--img-size LxA` | `1080x720` | Dimensões do espectrograma em tamanho real, em pixels |
+| `--img-size LxA` | `1080x720` | Dimensões do espectrograma em tamanho real, em pixels; a miniatura é reduzida a partir dessa renderização, então isso também afeta o detalhe da miniatura |
 | `--thumbnail-scale L:A` | `108:72` | Dimensões da miniatura, em pixels; define também o tamanho da célula `<img>` no HTML |
+| `--save-fullsize` | desligado | Grava também o PNG do espectrograma em tamanho real ao lado de cada miniatura. Desligado por padrão: o calendário usa apenas as miniaturas, e os PNGs em tamanho real ocupam muito mais espaço em disco |
 | `--clear` | desligado | Apaga os arquivos `*<label>.png` existentes no diretório de saída antes de gerar os novos |
 | `--include-audio` | desligado | Insere um player `<audio>` sob cada miniatura, apontando para o WAV correspondente em `recording_dir`. Os players usam `preload="none"`, então uma gravação só é buscada quando você aperta play nela |
 | `--annotate` | desligado | Modo de anotação: acrescenta uma caixa de seleção sob cada miniatura e uma barra que exporta as gravações marcadas como uma lista `.txt` (veja [Modo de anotação](#modo-de-anotação)) |
@@ -449,17 +450,19 @@ estas etapas, nesta ordem:
    PNGs no diretório de saída (`--output-dir`, se informado, senão
    `recording_dir`) — o diretório de origem dos WAVs nunca é escrito quando
    `--output-dir` está definido:
-   - **`spectrogram_ffmpeg`** chama `subprocess.run` duas vezes: uma para o
-     filtro `showspectrumpic` do ffmpeg, que renderiza o PNG em tamanho real
-     diretamente do WAV, e outra para reduzir esse PNG à miniatura. Ele pula
-     arquivos cujas imagens em tamanho real e miniatura já existam.
+   - **`spectrogram_ffmpeg`** chama, via `subprocess.run`, o filtro
+     `showspectrumpic` do ffmpeg encadeado com um filtro `scale`, de modo que a
+     miniatura é renderizada diretamente do WAV em uma única chamada. Com
+     `--save-fullsize`, ele roda duas vezes: uma para renderizar o PNG em
+     tamanho real e outra para reduzir esse PNG à miniatura. Ele pula
+     arquivos cujas imagens solicitadas já existam.
    - **`spectrogram_scipy`** lê o WAV com `scipy.io.wavfile`, converte estéreo
      em mono, calcula uma transformada de Fourier de tempo curto
      (`scipy.signal.stft`, `nperseg=2048`), aplica uma máscara para
      `[--lowest-freq, --highest-freq]` e renderiza o espectrograma de magnitude
-     logarítmica com `matplotlib` (colormap `plasma`, eixos ocultos). O PNG
-     salvo é então reaberto e redimensionado com o `Pillow` para produzir a
-     miniatura.
+     logarítmica com `matplotlib` (colormap `plasma`, eixos ocultos). O PNG em
+     tamanho real (mantido em memória, a menos que `--save-fullsize` esteja
+     ativo) é então redimensionado com o `Pillow` para produzir a miniatura.
 
    Quando `--max-cores` é maior que 1, os arquivos são distribuídos em um pool
    `concurrent.futures.ProcessPoolExecutor` desse tamanho, em vez de serem

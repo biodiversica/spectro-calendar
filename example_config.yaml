@@ -33,6 +33,9 @@ color_choice: plasma
 spec_label: lf
 img_size: "1080x720"
 thumbnail_scale: "108:72"
+# Set to true to also keep the full-size spectrogram PNG next to each
+# thumbnail (the calendar itself only uses the thumbnails).
+save_fullsize: false
 
 # Behavior flags.
 clear: false

@@ -10,9 +10,9 @@ filename.
 Each recording becomes a spectrogram thumbnail placed in a table, with dates
 as columns and times-of-day as rows, so you can quickly scan weeks of
 bioacoustic monitoring data at a glance (and optionally play the audio for
-any cell). A full-resolution version of every spectrogram is written next to
-its thumbnail, to be opened directly from the output directory when a cell
-needs a closer look.
+any cell). With `--save-fullsize`, a full-resolution version of every
+spectrogram is also written next to its thumbnail, to be opened directly from
+the output directory when a cell needs a closer look.
 
 This can be considered as an extended adaptation of the [scripts created by Nathan Wolek](https://github.com/nwolek/audiomoth-scripts).
 
@@ -137,8 +137,8 @@ Running the command produces the following, inside `recording_dir` by
 default, or entirely inside `--output-dir` if given (in which case
 `recording_dir` is only ever read from, never written to):
 
-- `<original-name>-fullsize-<label>.png` — one full-resolution spectrogram per WAV file
-- `<original-name>-thumbnail-<label>.png` — the matching downscaled thumbnail
+- `<original-name>-thumbnail-<label>.png` — one downscaled spectrogram thumbnail per WAV file
+- `<original-name>-fullsize-<label>.png` — the matching full-resolution spectrogram (only with `--save-fullsize`)
 - `index_<label>.html` — the calendar table laying out every thumbnail (with per-cell checkboxes and an export toolbar when `--annotate` is set)
 - `spectrogram-table.css` — the stylesheet used by the HTML table
 
@@ -222,8 +222,9 @@ list of valid keys) rather than silently ignored.
 | `--freq-scale` | `lin` | Frequency axis scale, `lin` or `log` (ffmpeg backend only) |
 | `--color-choice` | `plasma` | Color palette (ffmpeg backend; scipy backend is hard-coded to `plasma`) |
 | `--spec-label` | `""` | Suffix used to distinguish output filenames, e.g. run `lf`/`hf` bands into the same directory without collisions |
-| `--img-size WxH` | `1080x720` | Full-size spectrogram image dimensions in pixels |
+| `--img-size WxH` | `1080x720` | Full-size spectrogram image dimensions in pixels; the thumbnail is downscaled from this render, so it also affects thumbnail detail |
 | `--thumbnail-scale W:H` | `108:72` | Thumbnail dimensions in pixels; also sets the HTML `<img>` cell size |
+| `--save-fullsize` | off | Also save the full-size spectrogram PNG next to each thumbnail. Off by default: the calendar only uses thumbnails, and full-size PNGs take far more disk space |
 | `--clear` | off | Delete existing `*<label>.png` files in the output directory before generating new ones |
 | `--include-audio` | off | Embed an `<audio>` player under each thumbnail, linking back to the matching WAV in `recording_dir`. Players carry `preload="none"`, so a recording is fetched only when you press play on it |
 | `--annotate` | off | Annotation mode: add a checkbox under each thumbnail and a toolbar that exports the checked recordings as a `.txt` list (see [Annotation mode](#annotation-mode)) |
@@ -433,17 +434,19 @@ command executes these steps, in order:
    regardless of the flag). Both backends write their output PNGs to the
    output directory (`--output-dir` if given, else `recording_dir`) — the
    source WAV directory itself is never written to when `--output-dir` is set:
-   - **`spectrogram_ffmpeg`** shells out twice via `subprocess.run`: once to
-     ffmpeg's `showspectrumpic` filter to render the full-size PNG directly
-     from the WAV, and once more to scale that PNG down into the thumbnail.
-     It skips files whose full-size and thumbnail images already exist.
+   - **`spectrogram_ffmpeg`** shells out via `subprocess.run` to ffmpeg's
+     `showspectrumpic` filter, chained with a `scale` filter so the thumbnail
+     is rendered straight from the WAV in one call. With `--save-fullsize`
+     it instead runs twice: once to render the full-size PNG, and once more
+     to scale that PNG down into the thumbnail. It skips files whose
+     requested images already exist.
    - **`spectrogram_scipy`** reads the WAV with `scipy.io.wavfile`, downmixes
      stereo to mono, computes a short-time Fourier transform
      (`scipy.signal.stft`, `nperseg=2048`), masks it to
      `[--lowest-freq, --highest-freq]`, and renders the log-magnitude
      spectrogram with `matplotlib` (`plasma` colormap, axes hidden). The
-     saved PNG is then reopened and resized with `Pillow` to produce the
-     thumbnail.
+     full-size PNG (kept in memory unless `--save-fullsize` is set) is then
+     resized with `Pillow` to produce the thumbnail.
 
    When `--max-cores` is greater than 1, files are distributed across a
    `concurrent.futures.ProcessPoolExecutor` pool of that size instead of
