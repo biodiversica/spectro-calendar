@@ -618,10 +618,21 @@ def run(cmd):
     listen for its interactive keys, and parallel workers race each other
     restoring it, which can leave the shell with echo turned off.
 
+    stderr is captured rather than shown, so a failure can be reported as one
+    line naming the file (see ``process_wav_file``) instead of a traceback.
+
     Args:
         cmd (list): List of command-line arguments for subprocess
+
+    Raises:
+        RuntimeError: The command failed; the message is the last line it
+            wrote to stderr (ffmpeg's reason, e.g. "Invalid data found when
+            processing input"), or its exit code if it wrote nothing.
     """
-    subprocess.run(cmd, check=True, stdin=subprocess.DEVNULL)
+    result = subprocess.run(cmd, stdin=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True, errors="replace")
+    if result.returncode != 0:
+        lines = result.stderr.strip().splitlines()
+        raise RuntimeError(lines[-1] if lines else f"{cmd[0]} exited with code {result.returncode}")
 
 # ------------------------
 # Spectrogram generation using scipy
@@ -790,7 +801,7 @@ def spectrogram_ffmpeg(
             "ffmpeg",
             "-i", str(wav_path),
             "-lavfi", f"{spectrum_filter},scale={thumbnail_scale}",
-            "-v", "quiet",
+            "-v", "error",
             str(thumb_img)
         ])
         return
@@ -802,7 +813,7 @@ def spectrogram_ffmpeg(
         "ffmpeg",
         "-i", str(wav_path),
         "-lavfi", spectrum_filter,
-        "-v", "quiet",
+        "-v", "error",
         str(full_img)
     ])
 
@@ -813,7 +824,7 @@ def spectrogram_ffmpeg(
         "ffmpeg",
         "-i", str(full_img),
         "-vf", f"scale={thumbnail_scale}",
-        "-v", "quiet",
+        "-v", "error",
         str(thumb_img)
     ])
 
@@ -945,46 +956,53 @@ def generate_html(wav_files, file_dates, spec_label, rec_dir, out_dir, cell_widt
 # ------------------------
 # Process single wav file
 # ------------------------
-def process_wav_file(wav, args, out_dir):
+def process_wav_file(wav, args, out_dir, use_ffmpeg):
     """
-    Wrapper function for processing a single .wav file to generate its spectrogram.
-    This allows for parallel processing of each .wav file.
-    """
-    print(f"Processing {wav.name}...")
-    spectrogram_scipy(
-        wav,
-        args.highest_freq,
-        args.lowest_freq,
-        args.spec_label,
-        args.img_size,
-        args.thumbnail_scale,
-        out_dir,
-        args.save_fullsize,
-    )
+    Generates the spectrogram(s) of a single .wav file with the chosen
+    backend. Runs in a worker process when files are processed in parallel.
 
-# ------------------------
-# Process single wav file by calling ffmpeg
-# ------------------------
-def process_wav_file_with_ffmpeg(wav, args, out_dir):
+    A recording that cannot be read (truncated or corrupted, which happens
+    on field recorders when the card fills up or the battery dies) must not
+    stop the whole calendar, so any failure is returned instead of raised:
+    the caller reports it and the file simply gets an empty cell.
+
+    Returns:
+        str | None: Why the file failed, or None if it succeeded.
     """
-    Wrapper function for processing a single .wav file to generate its spectrogram.
-    This allows for parallel processing of each .wav file.
-    """
-    print(f"Processing {wav.name} with ffmpeg...")
-    spectrogram_ffmpeg(
-                    wav,
-                    args.gain,
-                    args.highest_freq,
-                    args.lowest_freq,
-                    args.gain_scale,
-                    args.freq_scale,
-                    args.color_choice,
-                    args.spec_label,
-                    args.img_size,
-                    args.thumbnail_scale,
-                    out_dir,
-                    args.save_fullsize,
-                )
+    print(f"Processing {wav.name}{' with ffmpeg' if use_ffmpeg else ''}...")
+    try:
+        if use_ffmpeg:
+            spectrogram_ffmpeg(
+                wav,
+                args.gain,
+                args.highest_freq,
+                args.lowest_freq,
+                args.gain_scale,
+                args.freq_scale,
+                args.color_choice,
+                args.spec_label,
+                args.img_size,
+                args.thumbnail_scale,
+                out_dir,
+                args.save_fullsize,
+            )
+        else:
+            spectrogram_scipy(
+                wav,
+                args.highest_freq,
+                args.lowest_freq,
+                args.spec_label,
+                args.img_size,
+                args.thumbnail_scale,
+                out_dir,
+                args.save_fullsize,
+            )
+    except Exception as e:
+        # ffmpeg starts its message with the input path, already named here
+        reason = (str(e) or type(e).__name__).removeprefix(f"{wav}: ")
+        print(f"Warning: could not read {wav}, skipped ({reason})")
+        return reason
+    return None
 
 # ------------------------
 # Main function (entry point)
@@ -1130,72 +1148,22 @@ def main():
     use_ffmpeg = ffmpeg_available() if args.use_ffmpeg else False
     print(f"Using ffmpeg: {use_ffmpeg}")
 
-    if use_ffmpeg:
-        if args.max_cores > 1:
-            # Use ProcessPoolExecutor to process multiple files concurrently
-            with concurrent.futures.ProcessPoolExecutor(max_workers=args.max_cores) as executor:
-                # Map the wav files to the process_wav_file function for parallel execution
-                futures = [
-                    executor.submit(
-                        process_wav_file_with_ffmpeg,
-                        wav,
-                        args,
-                        spectrogram_output_dir(wav, rec_dir, out_dir),
-                    )
-                    for wav in wav_files
-                ]
-
-                # Wait for all futures to complete (i.e., all spectrograms processed)
-                concurrent.futures.wait(futures)
-
-        else:
-            for wav in wav_files:
-                print(f"Processing {wav.name}...")
-                spectrogram_ffmpeg(
-                    wav,
-                    args.gain,
-                    args.highest_freq,
-                    args.lowest_freq,
-                    args.gain_scale,
-                    args.freq_scale,
-                    args.color_choice,
-                    args.spec_label,
-                    args.img_size,
-                    args.thumbnail_scale,
-                    spectrogram_output_dir(wav, rec_dir, out_dir),
-                    args.save_fullsize,
-                )
+    if args.max_cores > 1:
+        # Use ProcessPoolExecutor to process multiple files concurrently
+        with concurrent.futures.ProcessPoolExecutor(max_workers=args.max_cores) as executor:
+            futures = [
+                executor.submit(process_wav_file, wav, args, spectrogram_output_dir(wav, rec_dir, out_dir), use_ffmpeg)
+                for wav in wav_files
+            ]
+            reasons = [future.result() for future in futures]
     else:
-        if args.max_cores > 1:
-            # Use ProcessPoolExecutor to process multiple files concurrently
-            with concurrent.futures.ProcessPoolExecutor(max_workers=args.max_cores) as executor:
-                # Map the wav files to the process_wav_file function for parallel execution
-                futures = [
-                    executor.submit(
-                        process_wav_file,
-                        wav,
-                        args,
-                        spectrogram_output_dir(wav, rec_dir, out_dir),
-                    )
-                    for wav in wav_files
-                ]
-
-                # Wait for all futures to complete (i.e., all spectrograms processed)
-                concurrent.futures.wait(futures)
-        else:
-            for wav in wav_files:
-                print(f"Processing {wav.name}...")
-                spectrogram_scipy(
-                    wav,
-                    args.highest_freq,
-                    args.lowest_freq,
-                    args.spec_label,
-                    args.img_size,
-                    args.thumbnail_scale,
-                    spectrogram_output_dir(wav, rec_dir, out_dir),
-                    args.save_fullsize,
-                )
-
+        reasons = [
+            process_wav_file(wav, args, spectrogram_output_dir(wav, rec_dir, out_dir), use_ffmpeg)
+            for wav in wav_files
+        ]
+    failed = [(wav, reason) for wav, reason in zip(wav_files, reasons) if reason is not None]
+    if len(failed) == len(wav_files):
+        fatal(f"None of the {len(wav_files)} recordings could be read (e.g. {failed[0][0]}: {failed[0][1]})")
 
     cell_size = args.thumbnail_scale.split(':')
     generate_html(wav_files, file_dates, args.spec_label, rec_dir, out_dir, cell_width=cell_size[0], cell_height=cell_size[1], flag_audio=args.include_audio, flag_annotate=args.annotate)
@@ -1204,6 +1172,12 @@ def main():
     css_path = out_dir / "spectrogram-table.css"
     css_path.write_text(SPECTROGRAM_TABLE_CSS)
     print("spectrogram-table.css written")
+
+    if failed:
+        print(f"\n{len(failed)} recording(s) could not be read and were left out of the calendar:")
+        for wav, reason in failed:
+            print(f"   {wav}  ({reason})")
+        print()
 
     exec_end_time = time.time()
 
