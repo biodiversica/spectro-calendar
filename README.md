@@ -313,9 +313,11 @@ part before the extension) before that format is applied.
 | Date-first with dashes | `2026-03-04_10-00-00.wav` | `--datetime-format "%Y-%m-%d_%H-%M-%S"` |
 | Site-tagged recorder | `SITE1-20260304-100000.wav` | `--filename-prefix SITE1- --datetime-format "%Y%m%d-%H%M%S"` |
 
-If a filename doesn't start with `--filename-prefix`, or the remainder
-doesn't match `--datetime-format`, the tool exits with an error naming the
-offending file rather than silently skipping or misparsing it.
+WAV files that don't start with `--filename-prefix` are skipped (the tool
+prints how many), so recordings from other devices can share the folder. If a
+filename does carry the prefix but the remainder doesn't match
+`--datetime-format`, the tool exits with an error naming the offending file
+rather than silently skipping or misparsing it.
 
 ### Remote recordings over SSH
 
@@ -405,7 +407,8 @@ command executes these steps, in order:
 
 3. **File discovery** — every `.wav` file (case-insensitive) directly inside
    `recording_dir` is listed; with `--recursive`, its subfolders are walked
-   too. `parse_recording_datetime` strips
+   too. When `--filename-prefix` is set, files whose stem doesn't start with
+   it are dropped. `parse_recording_datetime` strips
    `--filename-prefix` from each filename stem and parses the remainder with
    `datetime.strptime(stem, --datetime-format)`, building a
    `{wav_path: datetime}` mapping; any filename that doesn't match exits the

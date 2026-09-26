@@ -321,7 +321,9 @@ extensão) antes que esse formato seja aplicado.
 | Data primeiro, com hífens | `2026-03-04_10-00-00.wav` | `--datetime-format "%Y-%m-%d_%H-%M-%S"` |
 | Gravador com etiqueta de sítio | `SITE1-20260304-100000.wav` | `--filename-prefix SITE1- --datetime-format "%Y%m%d-%H%M%S"` |
 
-Se um nome de arquivo não começar com `--filename-prefix`, ou se o restante não
+Arquivos WAV que não começam com `--filename-prefix` são ignorados (a
+ferramenta informa quantos), então gravações de outros equipamentos podem ficar
+na mesma pasta. Se um nome de arquivo tiver o prefixo, mas o restante não
 corresponder a `--datetime-format`, a ferramenta encerra com um erro nomeando o
 arquivo problemático, em vez de ignorá-lo ou interpretá-lo incorretamente em
 silêncio.
@@ -419,7 +421,8 @@ estas etapas, nesta ordem:
 
 3. **Descoberta dos arquivos** — todo arquivo `.wav` (sem distinção de
    maiúsculas/minúsculas) diretamente dentro de `recording_dir` é listado; com
-   `--recursive`, as subpastas também são percorridas.
+   `--recursive`, as subpastas também são percorridas. Com `--filename-prefix`
+   definido, os arquivos cujo radical não começa com ele são descartados.
    `parse_recording_datetime` remove `--filename-prefix` do radical de cada
    nome e interpreta o restante com `datetime.strptime(stem, --datetime-format)`,
    construindo um mapeamento `{caminho_wav: datetime}`; qualquer nome que não

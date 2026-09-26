@@ -1087,6 +1087,16 @@ def main():
             else "No WAV files found (recordings inside subfolders are only picked up with --recursive)"
         )
 
+    # With a prefix set, WAV files that don't carry it belong to another
+    # recorder (or aren't recordings at all): leave them out, don't stop.
+    if args.filename_prefix:
+        n_total = len(all_wav_files)
+        all_wav_files = [w for w in all_wav_files if w.stem.startswith(args.filename_prefix)]
+        if not all_wav_files:
+            fatal(f"None of the {n_total} WAV files starts with the filename prefix '{args.filename_prefix}'")
+        if len(all_wav_files) < n_total:
+            print(f"Skipping {n_total - len(all_wav_files)} WAV file(s) without the filename prefix '{args.filename_prefix}'")
+
     try:
         file_dates = {
             w: parse_recording_datetime(w, args.datetime_format, args.filename_prefix)
