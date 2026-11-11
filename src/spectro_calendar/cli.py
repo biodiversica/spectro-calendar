@@ -112,6 +112,33 @@ body {
 * {
   font-family: 'Consolas', 'Courier New', monospace;
 }
+/* Page header and footer: plain flex rows above and below the scrolling
+   table, so they stay in place without position:fixed. */
+.page-header,
+.page-footer {
+  flex: 0 0 auto;
+  padding: 6px 12px;
+  background: #1a1a1a;
+  color: #fff;
+}
+.page-header {
+  text-align: center;
+  font-weight: bold;
+  letter-spacing: 0.05em;
+}
+.page-footer {
+  text-align: center;
+  font-size: 0.9em;
+}
+.page-footer a {
+  color: #fff;
+  text-decoration: none;
+}
+.page-footer a:hover,
+.page-footer a:focus {
+  background: none;
+  text-decoration: underline;
+}
 .intro {
   max-width: 1280px;
   margin: 1em auto;
@@ -938,6 +965,7 @@ def generate_html(wav_files, file_dates, spec_label, rec_dir, out_dir, cell_widt
         f.write("<!DOCTYPE html>\n<html>\n<head>\n")
         f.write('<link rel="stylesheet" type="text/css" href="spectrogram-table.css">\n')
         f.write("</head>\n<body>\n")
+        f.write('<header class="page-header">spectro-calendar</header>\n')
 
         flag_speed = flag_speed and flag_audio
         if flag_speed:
@@ -960,6 +988,7 @@ def generate_html(wav_files, file_dates, spec_label, rec_dir, out_dir, cell_widt
             # a data attribute, keeping ANNOTATION_SCRIPT a static constant.
             export_name = f"annotations_{spec_label}" if spec_label else "annotations"
             f.write(f'<div class="annotate-bar" data-export-name="{html.escape(export_name, quote=True)}">\n')
+            f.write('<span class="annotate-title">Annotation</span>\n')
             f.write('<button type="button" id="annotate-export" disabled>Export selection (.txt)</button>\n')
             f.write('<label for="annotate-format">as</label>\n')
             f.write('<select id="annotate-format">\n')
@@ -1025,6 +1054,7 @@ def generate_html(wav_files, file_dates, spec_label, rec_dir, out_dir, cell_widt
             f.write("</tr>\n")
 
         f.write("</tbody></table></div>\n")
+        f.write('<footer class="page-footer"><a href="https://biodiversica.xyz/" target="_blank" rel="noopener">~/biodiversica</a></footer>\n')
         if flag_annotate:
             f.write(f"<script>\n{ANNOTATION_SCRIPT}</script>\n")
         if flag_speed:

@@ -494,7 +494,8 @@ command executes these steps, in order:
    `{(date, time): wav_path}` lookup from the parsed `file_dates` mapping for
    the *processed* files, then writes `index_<spec-label>.html`: a
    sticky-header/sticky-first-column HTML table with one column per date and
-   one row per time-of-day. Each cell either shows the matching thumbnail
+   one row per time-of-day, between a fixed page header (`spectro-calendar`)
+   and footer (a `~/biodiversica` link to https://biodiversica.xyz/). Each cell either shows the matching thumbnail
    (named after that file's actual stem, whatever its filename convention)
    with an `<audio>` player added when `--include-audio` is set, or is left
    blank if no recording exists for that date/time combination. Those players

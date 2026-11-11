@@ -513,7 +513,8 @@ estas etapas, nesta ordem:
    `{(data, hora): caminho_wav}` a partir do mapeamento `file_dates` dos
    arquivos *processados* e então escreve `index_<spec-label>.html`: uma tabela
    HTML com cabeçalho e primeira coluna fixos, uma coluna por data e uma linha
-   por horário do dia. Cada célula ou mostra a miniatura correspondente (nomeada
+   por horário do dia, entre um cabeçalho de página fixo (`spectro-calendar`) e
+   um rodapé (um link `~/biodiversica` para https://biodiversica.xyz/). Cada célula ou mostra a miniatura correspondente (nomeada
    segundo o radical real daquele arquivo, qualquer que seja sua convenção de
    nome), com um player `<audio>` adicionado quando `--include-audio` está
    ativo, ou fica em branco se não houver gravação para aquela combinação de
