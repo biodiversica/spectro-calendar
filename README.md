@@ -118,7 +118,9 @@ in the directory given with `--output-dir`:
 - `spectrogram-table.css`: the stylesheet used by the calendar page.
 
 `<label>` is the value of `--spec-label`, empty by default. The calendar is
-viewed by opening `index_<label>.html` in a web browser.
+viewed by opening `index_<label>.html` in a web browser. Its columns are
+labelled with dates in `DD-MM-YYYY` format, while the date options
+(`--dates`, `--start-date`, `--end-date`) take dates as `YYYYMMDD`.
 
 With `--output-dir`, all generated files are written to a separate directory
 and the recording directory is only read, never written to:
@@ -472,7 +474,7 @@ The complete processing pipeline is implemented in
    processed recording's date and time to its file, and writes
    `index_<label>.html` in UTF-8. The page consists of a fixed header
    (`spectro-calendar`), the optional toolbars, a table with one column per
-   date and one row per time of day, whose header row and first column remain
+   date (labelled `DD-MM-YYYY`) and one row per time of day, whose header row and first column remain
    visible while scrolling, and a footer linking to
    [biodiversica.xyz](https://biodiversica.xyz/). Each cell shows the
    matching thumbnail, together with an audio player when `--include-audio`

@@ -1045,8 +1045,10 @@ def generate_html(wav_files, file_dates, spec_label, rec_dir, out_dir, cell_widt
 
         # Header row: Time and Dates
         f.write("<thead><tr><th>Time</th>")
+        # Columns stay sorted by the YYYYMMDD key; only the label is
+        # shown day first.
         for d in unique_dates:
-            f.write(f"<th>{d}</th>")
+            f.write(f"<th>{d[6:8]}-{d[4:6]}-{d[:4]}</th>")
         f.write("</tr></thead>\n")
 
         # Body rows: Times and corresponding spectrogram images + audio players

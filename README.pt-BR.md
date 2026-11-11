@@ -123,7 +123,9 @@ padrão ou no diretório indicado com `--output-dir`:
 - `spectrogram-table.css`: a folha de estilos usada pela página do calendário.
 
 `<label>` é o valor de `--spec-label`, vazio por padrão. O calendário é
-visualizado abrindo `index_<label>.html` em um navegador.
+visualizado abrindo `index_<label>.html` em um navegador. As suas colunas são
+rotuladas com datas no formato `DD-MM-AAAA`, enquanto as opções de data
+(`--dates`, `--start-date`, `--end-date`) recebem datas como `AAAAMMDD`.
 
 Com `--output-dir`, todos os arquivos gerados são gravados em um diretório
 separado, e o diretório de gravações é apenas lido, nunca modificado:
@@ -492,7 +494,7 @@ execução consiste nas seguintes etapas:
    entre a data e a hora de cada gravação processada e o seu arquivo, e grava
    `index_<label>.html` em UTF-8. A página é composta por um cabeçalho fixo
    (`spectro-calendar`), as barras de ferramentas opcionais, uma tabela com
-   uma coluna por data e uma linha por horário do dia, cuja linha de cabeçalho
+   uma coluna por data (rotulada `DD-MM-AAAA`) e uma linha por horário do dia, cuja linha de cabeçalho
    e primeira coluna permanecem visíveis durante a rolagem, e um rodapé com um
    link para [biodiversica.xyz](https://biodiversica.xyz/). Cada célula exibe
    a miniatura correspondente, acompanhada de um player de áudio quando

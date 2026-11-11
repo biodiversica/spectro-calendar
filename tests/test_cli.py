@@ -75,7 +75,7 @@ def test_basic_calendar(monkeypatch, recordings):
 
     page = read_html(recordings)
     assert '<meta charset="utf-8">' in page
-    assert "<th>20260301</th>" in page and "<th>20260302</th>" in page
+    assert "<th>01-03-2026</th>" in page and "<th>02-03-2026</th>" in page
     assert len(links(page, "img")) == 3
     # 2 dates x 2 times, one of them without a recording
     assert page.count("<td>&nbsp;</td>") == 1
