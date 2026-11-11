@@ -159,6 +159,11 @@ body {
   position: -webkit-sticky;
   position: sticky;
   top: 0;
+  /* Without a z-index the cells scrolling underneath can paint over the
+     header -- notably <audio> controls, which the browser renders on their
+     own layer -- hiding the date. 3 keeps it above the body and the sticky
+     time column (2) but below the top-left corner cell (5). */
+  z-index: 3;
 }
 .table-scroll tfoot,
 .table-scroll tfoot th,
