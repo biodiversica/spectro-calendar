@@ -2,363 +2,351 @@
 
 *[English version](README.md)*
 
-Gera um "calendário" HTML navegável de espectrogramas a partir de uma pasta de
-gravações `.wav`, por exemplo de um [AudioMoth](https://www.openacousticdevices.info/audiomoth)
-ou de qualquer outro gravador acústico passivo que inclua uma marcação de
-data/hora no nome de cada arquivo.
+O spectro-calendar gera um calendário HTML navegável de espectrogramas a partir
+de uma pasta de gravações `.wav` feitas por um
+[AudioMoth](https://www.openacousticdevices.info/audiomoth) ou por qualquer
+outro gravador acústico passivo que registre a data e a hora no nome de cada
+arquivo.
 
-Cada gravação vira uma miniatura de espectrograma posicionada em uma tabela,
-com datas nas colunas e horários do dia nas linhas, de modo que é possível
-percorrer semanas de dados de monitoramento bioacústico rapidamente (e,
-opcionalmente, reproduzir o áudio de qualquer célula). Com `--save-fullsize`,
-uma versão em resolução completa de cada espectrograma também é gravada ao lado
-da sua miniatura, para ser aberta diretamente do diretório de saída quando
-alguma célula precisar de um olhar mais atento.
+Cada gravação é representada por uma miniatura de espectrograma posicionada em
+uma tabela, com as datas nas colunas e os horários do dia nas linhas, de modo
+que semanas de dados de monitoramento acústico podem ser examinadas de uma só
+vez. Opcionalmente, cada célula inclui um player de áudio da gravação, um
+controle de velocidade de reprodução para ouvir ultrassom e uma caixa de
+seleção para marcar gravações e exportar a seleção como uma lista. Com
+`--save-fullsize`, um espectrograma em resolução completa também é gravado ao
+lado de cada miniatura, para uma inspeção mais detalhada.
 
-Isto pode ser considerado uma adaptação estendida dos [scripts criados por Nathan Wolek](https://github.com/nwolek/audiomoth-scripts).
-
-## Requisitos
-
-- Python 3.10+
-- [`uv`](https://docs.astral.sh/uv/) (recomendado) ou `pip` puro, para gerenciar dependências
-- Opcionalmente, [`ffmpeg`](https://ffmpeg.org/) no seu `PATH` para o backend
-  rápido de espectrogramas (veja [Backends](#backends) abaixo)
-- Opcionalmente, [`sshfs`](https://github.com/libfuse/sshfs), caso as gravações
-  estejam em uma máquina remota (veja [Gravações remotas via SSH](#gravações-remotas-via-ssh) abaixo)
+A ferramenta é uma adaptação estendida dos
+[scripts criados por Nathan Wolek](https://github.com/nwolek/audiomoth-scripts).
 
 ## Instalação
 
-### Como ferramenta autônoma
+**Sem Python.** O instalador configura tudo o que é necessário e adiciona o
+comando `spectro-calendar`. Executá-lo novamente atualiza a instalação.
 
-Se você quer apenas *executar* o spectro-calendar, o `uv` pode instalá-lo
-diretamente do GitHub como uma ferramenta autônoma — com seu próprio ambiente
-virtual isolado, o comando `spectro-calendar` no seu `PATH` e nenhum clone
-para manter:
+No Windows, abra o PowerShell e execute:
 
-```bash
-uv tool install git+https://github.com/biodiversica/spectro-calendar.git
+```powershell
+powershell -ExecutionPolicy ByPass -c "irm https://github.com/biodiversica/spectro-calendar/releases/latest/download/install.ps1 | iex"
 ```
 
-O comando passa a funcionar a partir de qualquer diretório, sem o prefixo
-`uv run` e sem nada para ativar:
+No macOS e no Linux, abra um terminal e execute:
 
-```bash
-spectro-calendar /caminho/para/gravacoes --use-ffmpeg --include-audio
+```sh
+curl -LsSf https://github.com/biodiversica/spectro-calendar/releases/latest/download/install.sh | sh
 ```
 
-Se o seu shell não encontrá-lo depois disso, rode `uv tool update-shell` uma
-vez para adicionar o diretório de ferramentas do uv ao seu `PATH` e abra um
-novo shell. Para atualizar para o commit mais recente, ou para remover:
+O instalador executa as seguintes etapas:
+
+1. Instala o [uv](https://docs.astral.sh/uv/) em `~/.local/bin`, caso ainda
+   não esteja presente. O uv baixa o próprio Python, de modo que nenhuma
+   instalação prévia é necessária, e qualquer instalação de Python existente
+   permanece inalterada.
+2. Executa `uv tool install --python 3.12 spectro-calendar`, que instala a
+   ferramenta em um ambiente isolado e adiciona `spectro-calendar` ao PATH.
+
+O comando fica disponível nos terminais abertos após a instalação. A variável
+de ambiente `SPECTRO_CALENDAR_PACKAGE` altera o que o instalador instala (por
+exemplo, uma versão específica, como `spectro-calendar==0.1.0`). Para
+desinstalar, execute `uv tool uninstall spectro-calendar`.
+
+**Com uv ou pip.** O spectro-calendar é publicado no PyPI e requer Python 3.10
+ou posterior:
 
 ```bash
-uv tool upgrade spectro-calendar
-uv tool uninstall spectro-calendar
+uv tool install spectro-calendar   # como ferramenta de linha de comando isolada
+pip install spectro-calendar       # ou com pip, no ambiente atual
 ```
 
-Para experimentar sem instalar nada permanentemente, o `uvx` executa a
-ferramenta em um ambiente temporário, descartado em seguida:
+`uv tool upgrade spectro-calendar` atualiza a ferramenta. Ela também pode ser
+executada uma única vez, sem instalação permanente, com
+`uvx spectro-calendar /caminho/para/gravacoes`.
 
-```bash
-uvx --from git+https://github.com/biodiversica/spectro-calendar.git \
-  spectro-calendar /caminho/para/gravacoes
-```
+**Programas de sistema opcionais.** Dois programas externos ampliam a
+ferramenta. Nenhum deles é instalado pelos métodos acima:
 
-O `--from` é necessário porque o projeto não está publicado no PyPI, então é
-preciso dizer ao uv de onde buscá-lo. Se você já clonou o repositório, `uv
-tool install .` de dentro dele instala essa cópia de trabalho da mesma forma
-(acrescente `-e` para mantê-la editável).
+- O [ffmpeg](https://ffmpeg.org/) habilita o backend de espectrogramas mais
+  rápido (`--use-ffmpeg`; veja [Backends](#backends)). Ele está disponível nos
+  gerenciadores de pacotes usuais, por exemplo `brew install ffmpeg`,
+  `sudo apt install ffmpeg` ou `winget install --id Gyan.FFmpeg`.
+- O [sshfs](https://github.com/libfuse/sshfs) permite processar gravações
+  armazenadas em uma máquina remota (veja
+  [Gravações Remotas via SSH](#gravações-remotas-via-ssh)).
 
-Nos dois casos isso instala apenas as dependências Python. O backend opcional
-[`ffmpeg`](https://ffmpeg.org/) é um binário de sistema — instale-o pelo
-gerenciador de pacotes da sua distribuição se quiser usar `--use-ffmpeg`.
-
-### A partir de um clone
-
-Para modificar o código, ou para trabalhar a partir de um checkout, primeiro
-clone o repositório:
+**A partir do código-fonte.** Para modificar o código, clone o repositório e
+instale-o com o uv, que cria `.venv` a partir de `pyproject.toml` e `uv.lock`:
 
 ```bash
 git clone https://github.com/biodiversica/spectro-calendar.git
 cd spectro-calendar
-```
-
-Depois escolha um dos métodos de instalação — ambos instalam as mesmas dependências de
-execução (`numpy`, `scipy`, `matplotlib`, `pillow`, `pyyaml`):
-
-**Com `uv`** (cria o `.venv` e instala a partir de `pyproject.toml` /
-`uv.lock`):
-
-```bash
 uv sync
+uv run spectro-calendar /caminho/para/gravacoes
 ```
 
-**Com `pip`** (em um ambiente virtual de sua preferência):
+Alternativamente, com pip em um ambiente virtual (uma instalação editável
+requer `pip>=21.3`):
 
 ```bash
 python -m venv .venv
-source .venv/bin/activate  # no Windows: .venv\Scripts\activate
+source .venv/bin/activate        # no Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 pip install -e .
 ```
 
-O `requirements.txt` é mantido em sincronia com as dependências declaradas no
-`pyproject.toml`, para quem preferir não instalar o `uv`. A instalação editável
-(`pip install -e .`) exige `pip>=21.3`; se ela reclamar de `setup.py`, rode
-`pip install --upgrade pip` antes.
+`requirements.txt` lista as mesmas dependências de execução que
+`pyproject.toml`. A partir de um checkout do código-fonte, os comandos deste
+documento são prefixados com `uv run`, ou executados como
+`python -m spectro_calendar` em um ambiente ativado.
 
 ## Uso
 
-Rode como CLI através do `uv run`, como script de console instalado ou como
-módulo Python — todos são pontos de entrada equivalentes para o mesmo código,
-independentemente de como você instalou:
-
 ```bash
-# se instalado com `uv tool install` (veja acima) -- sem prefixo algum
 spectro-calendar /caminho/para/gravacoes
-
-# via uv, de dentro de um clone (sem um passo separado de "activate")
-uv run spectro-calendar /caminho/para/gravacoes
-
-# como módulo python (funciona tanto com uv quanto com um venv instalado via pip)
-uv run python -m spectro_calendar /caminho/para/gravacoes
-python -m spectro_calendar /caminho/para/gravacoes  # com o venv do pip ativado
-
-# o script de console também está no PATH do venv nos dois casos
-.venv/bin/spectro-calendar /caminho/para/gravacoes
 ```
 
-`recording_dir` precisa conter arquivos `.wav` com data/hora embutidas no nome
-do arquivo. Por padrão apenas o primeiro nível de `recording_dir` é varrido;
-use `--recursive` se as gravações estiverem em subpastas (veja
-[Subpastas](#subpastas) abaixo). Por padrão a ferramenta espera a convenção do AudioMoth,
-`AAAAMMDD_HHMMSS.WAV` (ex.: `20260315_063000.WAV`), mas isso é totalmente
-configurável via `--datetime-format` e `--filename-prefix` — veja
-[Formatos de nome de arquivo](#formatos-de-nome-de-arquivo) abaixo para
-gravadores que usam outra convenção (ex.: `SM4_AAAAMMDD_HHMMSS.wav` do
-Wildlife Acoustics SM4).
+O diretório de gravações deve conter arquivos `.wav` cujos nomes incluam a data
+e a hora da gravação. Por padrão, a ferramenta espera a convenção do AudioMoth,
+`AAAAMMDD_HHMMSS.WAV` (por exemplo, `20260315_063000.WAV`); outras convenções
+são configuradas com `--datetime-format` e `--filename-prefix` (veja
+[Formatos de Nome de Arquivo](#formatos-de-nome-de-arquivo)). Somente o nível
+superior do diretório é examinado, a menos que `--recursive` seja informado
+(veja [Subpastas](#subpastas)).
 
-Executar o comando produz o seguinte, dentro de `recording_dir` por padrão, ou
-inteiramente dentro de `--output-dir` se informado (caso em que `recording_dir`
-é apenas lido, nunca escrito):
+Uma execução produz os seguintes arquivos, no diretório de gravações por
+padrão ou no diretório indicado com `--output-dir`:
 
-- `<nome-original>-thumbnail-<label>.png` — uma miniatura reduzida do espectrograma por arquivo WAV
-- `<nome-original>-fullsize-<label>.png` — o espectrograma correspondente em resolução completa (apenas com `--save-fullsize`)
-- `index_<label>.html` — a tabela do calendário que dispõe todas as miniaturas (com caixas de seleção por célula e uma barra de exportação quando `--annotate` está ativo)
-- `spectrogram-table.css` — a folha de estilo usada pela tabela HTML
+- `<nome>-thumbnail-<label>.png`: uma miniatura de espectrograma por gravação.
+- `<nome>-fullsize-<label>.png`: o espectrograma em resolução completa,
+  gravado somente com `--save-fullsize`.
+- `index_<label>.html`: a página do calendário.
+- `spectrogram-table.css`: a folha de estilos usada pela página do calendário.
 
-Abra `index_<label>.html` em um navegador para ver o calendário. Use
-`--output-dir` para manter todos os arquivos gerados (imagens, HTML, CSS)
-separados das gravações originais, por exemplo para publicar apenas essa pasta:
+`<label>` é o valor de `--spec-label`, vazio por padrão. O calendário é
+visualizado abrindo `index_<label>.html` em um navegador.
+
+Com `--output-dir`, todos os arquivos gerados são gravados em um diretório
+separado, e o diretório de gravações é apenas lido, nunca modificado:
 
 ```bash
-uv run spectro-calendar /dados/sitio-1/gravacoes --output-dir /dados/sitio-1/calendario
+spectro-calendar /dados/sitio-1/gravacoes --output-dir /dados/sitio-1/calendario
 ```
 
-O HTML continua ligando o player `<audio>` opcional de cada miniatura ao WAV
-original em `recording_dir` por um caminho relativo, então `--include-audio`
-continua funcionando mesmo que as gravações em si não sejam copiadas para
-`--output-dir`.
+Os players de áudio (`--include-audio`) referenciam as gravações originais por
+um caminho relativo, de modo que continuam funcionando embora as gravações não
+sejam copiadas para o diretório de saída. Quando não existe caminho relativo,
+como no caso de gravações e saída em unidades diferentes no Windows, um
+caminho absoluto é usado.
 
 ### Subpastas
 
-Por padrão só são considerados os arquivos `.wav` que estão diretamente em
-`recording_dir` — qualquer coisa dentro de uma subpasta é ignorada. Use
-`--recursive` para descer também pelas subpastas:
+Por padrão, somente os arquivos `.wav` localizados diretamente no diretório de
+gravações são processados. Com `--recursive`, as subpastas também são
+examinadas:
 
 ```bash
-uv run spectro-calendar /dados/sitio-1/gravacoes --recursive
+spectro-calendar /dados/sitio-1/gravacoes --recursive
 ```
 
-Os PNGs de cada gravação são então escritos em um subdiretório do diretório de
-saída que espelha a localização do WAV, ex.: uma gravação em
-`gravacoes/moth-a/20260304_100000.WAV` gera suas imagens em
-`calendario/moth-a/`. Isso evita que arquivos de mesmo nome em subpastas
-diferentes (uma pasta por gravador ou por instalação, por exemplo)
-sobrescrevam os espectrogramas uns dos outros. O calendário HTML e o CSS
-continuam na raiz do diretório de saída e referenciam as imagens por caminho
-relativo.
+As imagens de cada gravação são então gravadas em um subdiretório do diretório
+de saída que reproduz a localização da gravação. Por exemplo, uma gravação em
+`gravacoes/moth-a/20260304_100000.WAV` produz suas imagens em
+`calendario/moth-a/`. Isso evita que gravações com nomes idênticos em
+subpastas diferentes (tipicamente uma pasta por gravador ou campanha)
+sobrescrevam os espectrogramas umas das outras. A página do calendário e a
+folha de estilos permanecem no nível superior do diretório de saída.
 
-Uma ressalva: o calendário tem uma única célula por data e horário do dia,
-então se duas gravações compartilham o mesmo horário — dois gravadores com a
-mesma programação, em duas subpastas — apenas uma delas pode aparecer na
-tabela. A execução imprime um aviso nomeando os dois arquivos sempre que isso
-acontece, e ainda gera os espectrogramas de todos eles, então nada se perde em
-disco. Para ver todas as gravações, rode a ferramenta uma vez por subpasta,
-cada uma com seu próprio `--output-dir`.
+O calendário tem uma única célula para cada combinação de data e horário. Quando
+duas gravações têm o mesmo carimbo de data e hora, por exemplo dois gravadores
+operando no mesmo agendamento, somente uma delas pode aparecer na tabela. Nesse
+caso, a ferramenta exibe um aviso com o nome dos dois arquivos, e os
+espectrogramas de todas as gravações são gerados mesmo assim. Para exibir todas
+as gravações, a ferramenta pode ser executada uma vez por subpasta, cada vez
+com o seu próprio `--output-dir`.
 
-### Arquivo de configuração
+### Arquivo de Configuração
 
-Em vez de usar flags de linha de comando, as opções podem ser
-definidas em um arquivo YAML e passadas com `--config`:
+As opções também podem ser definidas em um arquivo YAML passado com `--config`:
 
 ```bash
-uv run spectro-calendar --config example_config.yaml
+spectro-calendar --config example_config.yaml
 ```
 
-Veja [`example_config.yaml`](example_config.yaml) para um exemplo completo.
-Cada chave YAML corresponde a uma flag da CLI com os hífens trocados por
-sublinhados (ex.: `--output-dir` → `output_dir`), incluindo o próprio
-`recording_dir`, de modo que uma execução pode ser totalmente descrita por um
-arquivo de configuração, sem nenhum argumento posicional.
+[`example_config.yaml`](example_config.yaml) contém um exemplo completo. Cada
+chave corresponde a uma opção de linha de comando, com hífens substituídos por
+sublinhados (por exemplo, `--output-dir` torna-se `output_dir`). O diretório de
+gravações também pode ser definido, como `recording_dir`, de modo que uma
+execução pode ser descrita inteiramente por um arquivo de configuração.
 
-**Qualquer flag passada explicitamente na linha de comando tem precedência
-sobre o arquivo de configuração** — a configuração apenas fornece valores
-padrão para as opções que você não especificar na linha de comando:
+As opções informadas na linha de comando têm precedência sobre o arquivo de
+configuração, que apenas fornece valores padrão:
 
 ```bash
-# usa todos os valores de example_config.yaml, exceto max_cores, que é
-# sobrescrito para 2 independentemente do que o arquivo diga
-uv run spectro-calendar --config example_config.yaml --max-cores 2
+# Usa todos os valores de example_config.yaml, exceto max_cores, que passa a
+# ser 2 independentemente do valor no arquivo.
+spectro-calendar --config example_config.yaml --max-cores 2
 ```
 
-Uma chave desconhecida no arquivo de configuração é tratada como erro (com a
-lista de chaves válidas), em vez de ser silenciosamente ignorada.
+Uma chave não reconhecida no arquivo de configuração é informada como erro,
+com a lista das chaves válidas.
 
 ### Opções
 
-| Flag | Padrão | Descrição |
+| Opção | Padrão | Descrição |
 |---|---|---|
-| `recording_dir` | — | Diretório com as gravações `.wav` (posicional; obrigatório, a menos que definido via `recording_dir` no `--config`) |
-| `--config CAMINHO` | nenhum | Arquivo YAML com valores padrão das opções (veja [Arquivo de configuração](#arquivo-de-configuração)); flags explícitas da CLI sempre têm precedência |
-| `--use-ffmpeg` | desligado | Usa o backend ffmpeg em vez do scipy (volta ao scipy se o ffmpeg não estiver instalado) |
-| `--max-cores N` | `4` | Número de arquivos processados em paralelo (`1` desativa o paralelismo) |
-| `--gain N` | `1` | Ganho em dB aplicado ao espectrograma (apenas backend ffmpeg) |
-| `--gain-scale` | `log` | Escala do ganho no ffmpeg (`log`, `sqrt`, `lin`, ...) |
+| `recording_dir` | nenhum | Diretório que contém as gravações `.wav`. Posicional; obrigatório, a menos que seja definido como `recording_dir` no arquivo de configuração |
+| `--config CAMINHO` | nenhum | Arquivo YAML com valores padrão das opções (veja [Arquivo de Configuração](#arquivo-de-configuração)) |
+| `--version` | | Exibe a versão instalada e encerra |
+| `--use-ffmpeg` | desligado | Usa o backend ffmpeg em vez do scipy. O backend scipy é usado quando o ffmpeg não está instalado |
+| `--max-cores N` | `4` | Número de gravações processadas em paralelo (`1` desativa o processamento paralelo) |
+| `--gain N` | `1` | Ganho em dB aplicado ao espectrograma (somente backend ffmpeg) |
+| `--gain-scale` | `log` | Escala de intensidade do espectrograma do ffmpeg (`log`, `sqrt`, `lin` e outras aceitas pelo ffmpeg) |
 | `--highest-freq N` | `20000` | Limite superior do eixo de frequência, em Hz |
 | `--lowest-freq N` | `0` | Limite inferior do eixo de frequência, em Hz |
-| `--freq-scale` | `lin` | Escala do eixo de frequência, `lin` ou `log` (apenas backend ffmpeg) |
-| `--color-choice` | `plasma` | Paleta de cores (backend ffmpeg; o backend scipy é fixo em `plasma`) |
-| `--spec-label` | `""` | Sufixo usado para distinguir os nomes dos arquivos de saída, ex.: gerar as bandas `lf`/`hf` no mesmo diretório sem colisões |
-| `--img-size LxA` | `1080x720` | Dimensões do espectrograma em tamanho real, em pixels; a miniatura é reduzida a partir dessa renderização, então isso também afeta o detalhe da miniatura |
-| `--thumbnail-scale L:A` | `108:72` | Dimensões da miniatura, em pixels; define também o tamanho da célula `<img>` no HTML |
-| `--save-fullsize` | desligado | Grava também o PNG do espectrograma em tamanho real ao lado de cada miniatura. Desligado por padrão: o calendário usa apenas as miniaturas, e os PNGs em tamanho real ocupam muito mais espaço em disco |
+| `--freq-scale` | `lin` | Escala do eixo de frequência, `lin` ou `log` (somente backend ffmpeg) |
+| `--color-choice` | `plasma` | Paleta de cores (somente backend ffmpeg; o backend scipy usa sempre `plasma`) |
+| `--spec-label` | `""` | Sufixo acrescentado aos nomes dos arquivos de saída, para que várias bandas de frequência (por exemplo `lf` e `hf`) possam ser gravadas no mesmo diretório |
+| `--img-size LxA` | `1080x720` | Dimensões do espectrograma em tamanho real, em pixels. A miniatura é reduzida a partir dessa imagem, de modo que esse valor também afeta o detalhe da miniatura |
+| `--thumbnail-scale L:A` | `108:72` | Dimensões da miniatura, em pixels; também o tamanho da imagem no calendário |
+| `--save-fullsize` | desligado | Grava também o espectrograma em tamanho real ao lado de cada miniatura. Desligado por padrão, pois o calendário usa somente as miniaturas e as imagens em tamanho real ocupam consideravelmente mais espaço em disco |
 | `--clear` | desligado | Apaga os arquivos `*<label>.png` existentes no diretório de saída antes de gerar os novos |
-| `--include-audio` | desligado | Insere um player `<audio>` sob cada miniatura, apontando para o WAV correspondente em `recording_dir`. Os players usam `preload="none"`, então uma gravação só é buscada quando você aperta play nela |
-| `--speed-control` | desligado | Acrescenta um seletor de velocidade de reprodução (de 1× até 1/16) acima do calendário. Desacelerar também abaixa o tom, como o "Change Speed" do Audacity, tornando o ultrassom audível (veja [Ouvindo ultrassom](#ouvindo-ultrassom)). Requer `--include-audio` |
-| `--annotate` | desligado | Modo de anotação: acrescenta uma caixa de seleção sob cada miniatura e uma barra que exporta as gravações marcadas como uma lista `.txt` (veja [Modo de anotação](#modo-de-anotação)) |
-| `--dates D1 D2 ...` | todas as datas | Restringe o processamento a datas `AAAAMMDD` específicas (validadas contra as datas realmente presentes, usando a data lida da gravação, qualquer que seja o formato do nome do arquivo) |
-| `--start-date AAAAMMDD` | data mais antiga disponível | Primeira data a incluir; seleciona um intervalo contíguo em vez de uma lista explícita. Não pode ser combinada com `--dates` |
-| `--end-date AAAAMMDD` | data mais recente disponível | Última data a incluir (inclusive). Não pode ser combinada com `--dates` |
-| `--time-step N` | nenhum | Mantém apenas uma gravação por intervalo de N minutos em cada dia, em vez de todas as gravações |
-| `--start-time HHMMSS` | `000000` | Início da janela diária de horários a incluir |
-| `--end-time HHMMSS` | `235900` | Fim da janela diária de horários a incluir |
-| `--recursive` | desligado | Também varre as subpastas de `recording_dir` em busca de arquivos `.wav`. Os espectrogramas de cada arquivo são escritos em uma subpasta correspondente dentro do diretório de saída (veja [Subpastas](#subpastas)) |
-| `--output-dir DIR` | `recording_dir` | Diretório para toda a saída gerada (PNGs dos espectrogramas, `index_<label>.html`, `spectrogram-table.css`); criado se não existir. Quando definido, `recording_dir` é apenas lido — nada é escrito lá. O player `<audio>` do HTML (`--include-audio`) continua apontando para o WAV original por um caminho relativo |
-| `--datetime-format FMT` | `%Y%m%d_%H%M%S` | Formato compatível com strptime descrevendo como data/hora estão embutidas em cada nome de arquivo, após remover `--filename-prefix` |
-| `--filename-prefix PREFIXO` | `""` | Prefixo literal a ser removido do nome do arquivo antes de aplicar `--datetime-format`, ex.: `SM4_` para `SM4_20260304_100000.wav` |
+| `--include-audio` | desligado | Adiciona um player de áudio sob cada miniatura, vinculado à gravação original. Os players usam `preload="none"`, de modo que uma gravação é carregada somente quando é reproduzida |
+| `--speed-control` | desligado | Adiciona um seletor de velocidade de reprodução (de 1× a 1/16) acima do calendário. Reduzir a velocidade também abaixa o tom, o que torna o ultrassom audível (veja [Ouvindo Ultrassom](#ouvindo-ultrassom)). Requer `--include-audio` |
+| `--annotate` | desligado | Modo de anotação: adiciona uma caixa de seleção sob cada miniatura e uma barra que exporta as gravações selecionadas como uma lista `.txt` (veja [Modo de Anotação](#modo-de-anotação)) |
+| `--dates D1 D2 ...` | todas as datas | Processa somente as datas informadas, no formato `AAAAMMDD`. Cada data deve ter gravações |
+| `--start-date AAAAMMDD` | data mais antiga | Primeira data de um intervalo contínuo. Não pode ser combinada com `--dates` |
+| `--end-date AAAAMMDD` | data mais recente | Última data do intervalo (inclusive). Não pode ser combinada com `--dates` |
+| `--time-step N` | nenhum | Mantém no máximo uma gravação por intervalo de N minutos em cada dia |
+| `--start-time HHMMSS` | `000000` | Início da janela diária de horários |
+| `--end-time HHMMSS` | `235900` | Fim da janela diária de horários |
+| `--recursive` | desligado | Examina também as subpastas do diretório de gravações (veja [Subpastas](#subpastas)) |
+| `--output-dir DIR` | diretório de gravações | Diretório para todos os arquivos gerados; criado se não existir. Quando definido, o diretório de gravações é apenas lido |
+| `--datetime-format FMT` | `%Y%m%d_%H%M%S` | Formato `strptime` que descreve como a data e a hora aparecem em cada nome de arquivo, após a remoção do prefixo |
+| `--filename-prefix PREFIXO` | `""` | Texto fixo que precede a data e a hora em cada nome de arquivo, por exemplo `SM4_` para `SM4_20260304_100000.wav` |
 
-Exemplo — backend rápido do ffmpeg, apenas a banda de baixas frequências, uma
-amostra a cada 30 minutos entre 5h e 9h, 6 processos em paralelo:
+O exemplo a seguir usa o backend ffmpeg com seis processos paralelos, exibe
+somente frequências até 2 kHz e mantém uma gravação a cada 30 minutos entre
+05:00 e 09:00:
 
 ```bash
-uv run spectro-calendar /dados/sitio-1 \
+spectro-calendar /dados/sitio-1 \
   --use-ffmpeg --max-cores 6 \
   --spec-label lf --highest-freq 2000 \
   --time-step 30 --start-time 050000 --end-time 090000
 ```
 
-### Ouvindo ultrassom
+### Formatos de Nome de Arquivo
 
-`--speed-control` acrescenta um seletor **Playback speed** acima do
-calendário (1×, 1/2, 1/4, 1/8, 1/10, 1/16) que vale para todos os players de
-áudio:
+`--datetime-format` aceita qualquer
+[formato strptime](https://docs.python.org/3/library/datetime.html#strftime-and-strptime-format-codes).
+`--filename-prefix` é removido do radical do nome do arquivo (o nome sem a
+extensão) antes da aplicação do formato.
 
-```bash
-uv run spectro-calendar /dados/sitio-1 --include-audio --speed-control
-```
+| Gravador ou convenção | Exemplo de nome de arquivo | Opções |
+|---|---|---|
+| AudioMoth (padrão) | `20260304_100000.WAV` | nenhuma |
+| Wildlife Acoustics SM4 | `SM4_20260304_100000.wav` | `--filename-prefix SM4_` |
+| Data primeiro, com hífens | `2026-03-04_10-00-00.wav` | `--datetime-format "%Y-%m-%d_%H-%M-%S"` |
+| Identificador de sítio | `SITE1-20260304-100000.wav` | `--filename-prefix SITE1- --datetime-format "%Y%m%d-%H%M%S"` |
 
-A desaceleração funciona como o "Change Speed" do Audacity, e não como uma
-mudança de andamento que preserva o tom: o tom cai pelo mesmo fator que a
-velocidade. Isso é expansão temporal, a forma usual de ouvir ultrassom, então
-um chamado de morcego de 40 kHz tocado a 1/10 da velocidade é ouvido a 4 kHz,
-e uma gravação de um minuto dura dez minutos. O seletor mostra essa conversão
-para a velocidade escolhida.
+Quando um prefixo é definido, os arquivos `.wav` que não começam com ele são
+ignorados e a sua quantidade é informada, de modo que gravações de outros
+dispositivos podem permanecer no mesmo diretório. Um arquivo que começa com o
+prefixo mas não corresponde a `--datetime-format` interrompe a execução com um
+erro que identifica o arquivo, em vez de ser ignorado ou interpretado
+incorretamente.
 
-Por baixo, ele apenas define as propriedades `playbackRate` e
-`preservesPitch` do próprio navegador em cada elemento `<audio>`. Nada é
-decodificado ou processado na página, e os players continuam sem carregar
-nada até você apertar play. As gravações precisam de uma taxa de amostragem
-alta o bastante para conter o ultrassom (ex.: AudioMoth a 250 ou 384 kHz).
-1/16 é a menor velocidade que os navegadores reproduzem de forma confiável.
+### Ouvindo Ultrassom
 
-### Modo de anotação
-
-`--annotate` transforma o calendário em uma ferramenta simples de anotação:
-cada célula ganha uma caixa de seleção sob a miniatura, e uma barra no topo
-da página exporta o que estiver marcado como um arquivo de texto simples.
+`--speed-control` adiciona um seletor **Playback speed** acima do calendário,
+com os valores 1×, 1/2, 1/4, 1/8, 1/10 e 1/16, que se aplica a todos os
+players de áudio:
 
 ```bash
-uv run spectro-calendar /dados/sitio-1 --include-audio --annotate
+spectro-calendar /dados/sitio-1 --include-audio --speed-control
 ```
 
-Percorra (e escute) o calendário, marque as gravações que interessam e
-aperte **Export selection (.txt)**. Não há rótulo a digitar — a lista
-exportada *é* o rótulo: cada linha identifica uma gravação selecionada, e o
-seletor ao lado do botão escolhe o que vai nela:
+A velocidade é alterada da mesma forma que no efeito "Change Speed" do
+Audacity, e não como uma mudança de andamento que preserva o tom: o tom é
+dividido pelo mesmo fator que a velocidade. Essa técnica, conhecida como
+expansão temporal, é a forma usual de ouvir ultrassom. Um chamado de morcego
+de 40 kHz reproduzido a 1/10 da velocidade é ouvido a 4 kHz, e uma gravação de
+um minuto passa a durar dez minutos. O seletor exibe essa conversão para a
+velocidade escolhida.
 
-| Formato | Uma linha fica assim |
+O seletor apenas define as propriedades `playbackRate` e `preservesPitch` de
+cada elemento `<audio>` no navegador. Nenhum áudio é decodificado ou
+processado pela página, e os players continuam sem carregar nada até serem
+reproduzidos. As gravações devem ter uma taxa de amostragem alta o suficiente
+para conter o ultrassom (por exemplo, uma gravação de AudioMoth a 250 ou
+384 kHz). 1/16 é a menor velocidade que os navegadores reproduzem de forma
+confiável.
+
+### Modo de Anotação
+
+`--annotate` transforma o calendário em uma ferramenta simples de anotação.
+Cada célula recebe uma caixa de seleção sob a sua miniatura, e uma barra no
+topo da página exporta as gravações selecionadas como um arquivo de texto
+simples:
+
+```bash
+spectro-calendar /dados/sitio-1 --include-audio --annotate
+```
+
+As gravações de interesse são selecionadas durante a revisão do calendário, e o
+botão **Export selection (.txt)** baixa a lista. Nenhum rótulo precisa ser
+digitado, pois a própria lista exportada serve como anotação. Cada linha
+identifica uma gravação selecionada, no formato escolhido no seletor ao lado
+do botão:
+
+| Formato | Exemplo de linha |
 |---|---|
 | `filename` (padrão) | `20260304_100000.WAV` |
 | `date & time` | `2026-03-04 10:00:00` |
 | `filename + date & time` | `20260304_100000.WAV<TAB>2026-03-04 10:00:00` |
 
-As linhas saem em ordem cronológica, e o download recebe o nome
-`annotations_<label>_<AAAAMMDD-HHMMSS>.txt` (o carimbo de tempo é o do
-momento da exportação, então passagens sucessivas não sobrescrevem umas às
-outras). Com `--recursive`, o nome do arquivo vem qualificado pela subpasta
-de origem (`moth-a/20260304_100000.WAV`), já que o mesmo nome pode aparecer
-uma vez por gravador. Rode a ferramenta uma vez por banda (`--spec-label lf`,
-`hf`, ...) e cada calendário exporta com seu próprio nome.
+As linhas seguem a ordem cronológica, e o arquivo é nomeado
+`annotations_<label>_<AAAAMMDD-HHMMSS>.txt`, em que o carimbo de tempo é o
+momento da exportação, de modo que exportações sucessivas não se sobrescrevem.
+Com `--recursive`, cada nome de arquivo inclui a subpasta em que foi
+encontrado (por exemplo, `moth-a/20260304_100000.WAV`), pois o mesmo nome pode
+ocorrer uma vez por gravador. Calendários gerados para bandas de frequência
+diferentes (`--spec-label lf`, `hf` e assim por diante) exportam com os seus
+próprios nomes.
 
-Para selecionar muitas gravações de uma vez, clique em uma caixa de seleção e
-depois dê **Shift+clique** em outra: todas as caixas no retângulo formado por
-elas recebem o mesmo estado, ou seja, os horários entre as duas linhas em cada
-data entre as duas colunas. Clicar em 01 mar 05:00 e depois dar Shift+clique em
-03 mar 07:00 seleciona 05:00–07:00 em cada um dos dias 1, 2 e 3 de março. As
-caixas assumem o novo estado da que recebeu o Shift+clique, então o mesmo gesto
-sobre caixas marcadas limpa o intervalo, e cada Shift+clique vira o canto
-inicial do próximo.
+Para selecionar várias gravações de uma vez, clica-se em uma caixa de seleção
+e, em seguida, em outra mantendo **Shift** pressionado. Todas as caixas no
+retângulo entre as duas recebem então o mesmo estado: os horários entre as
+duas linhas, em cada data entre as duas colunas. Por exemplo, clicar em
+01 Mar 05:00 e depois clicar com Shift em 03 Mar 07:00 seleciona das 05:00 às
+07:00 nos dias 1, 2 e 3 de março. Todas as caixas assumem o novo estado da
+caixa clicada com Shift, de modo que a mesma ação sobre caixas marcadas limpa
+o intervalo. Cada clique com Shift também se torna o canto inicial do próximo
+intervalo.
 
-As células marcadas ficam destacadas, a barra mantém a contagem atualizada e
-**Clear selection** desmarca tudo de uma vez (com confirmação). A seleção
-também é lembrada no armazenamento local do navegador, associada ao caminho
-da própria página, de modo que recarregar o calendário — ou voltar a ele
-amanhã — retoma de onde você parou em vez de começar de uma folha em branco.
+As células selecionadas são destacadas, a barra exibe o número de gravações
+selecionadas, e **Clear selection** limpa toda a seleção após uma confirmação.
+A seleção também é armazenada no armazenamento local do navegador, sob uma
+chave derivada da localização da página, de modo que é restaurada quando o
+calendário é recarregado ou reaberto posteriormente.
 
-Uma ressalva sobre essa memória: o Chrome nega armazenamento local a páginas
-abertas diretamente do disco (`file://`), então ali a seleção dura apenas
-enquanto a aba estiver aberta, e exportar antes de fechá-la é o jeito de não
-perder o trabalho. O Firefox permite, e servir o diretório de saída por HTTP
-(veja [`scripts/serve_calendars.py`](scripts/serve_calendars.py)) faz
-funcionar em qualquer navegador. Todo o resto, inclusive a exportação em si,
-funciona normalmente a partir de `file://` nos dois navegadores.
+O Chrome não oferece armazenamento local a páginas abertas diretamente do disco
+(`file://`). No Chrome, portanto, a seleção é mantida somente enquanto a aba
+estiver aberta, e deve ser exportada antes que a aba seja fechada. O Firefox
+oferece armazenamento local a essas páginas. Servir o calendário por HTTP
+torna a seleção persistente em qualquer navegador; nesse caso, o servidor deve
+ser iniciado em um diretório que contenha tanto o diretório de saída quanto as
+gravações, para que os players de áudio alcancem as gravações (por exemplo,
+`python -m http.server` executado no diretório pai comum aos dois). Todas as
+demais funções, incluindo a exportação, funcionam a partir de `file://` nos
+dois navegadores.
 
-### Formatos de nome de arquivo
+### Gravações Remotas via SSH
 
-`--datetime-format` aceita qualquer string de formato do [strptime](https://docs.python.org/3/library/datetime.html#strftime-and-strptime-format-codes);
-`--filename-prefix` é removido do radical do nome do arquivo (a parte antes da
-extensão) antes que esse formato seja aplicado.
-
-| Gravador / convenção | Exemplo de nome | Flags |
-|---|---|---|
-| AudioMoth (padrão) | `20260304_100000.WAV` | nenhuma necessária |
-| Wildlife Acoustics SM4 | `SM4_20260304_100000.wav` | `--filename-prefix SM4_` |
-| Data primeiro, com hífens | `2026-03-04_10-00-00.wav` | `--datetime-format "%Y-%m-%d_%H-%M-%S"` |
-| Gravador com etiqueta de sítio | `SITE1-20260304-100000.wav` | `--filename-prefix SITE1- --datetime-format "%Y%m%d-%H%M%S"` |
-
-Arquivos WAV que não começam com `--filename-prefix` são ignorados (a
-ferramenta informa quantos), então gravações de outros equipamentos podem ficar
-na mesma pasta. Se um nome de arquivo tiver o prefixo, mas o restante não
-corresponder a `--datetime-format`, a ferramenta encerra com um erro nomeando o
-arquivo problemático, em vez de ignorá-lo ou interpretá-lo incorretamente em
-silêncio.
-
-### Gravações remotas via SSH
-
-Se as gravações estiverem em uma máquina remota, monte esse diretório
-localmente com o [`sshfs`](https://github.com/libfuse/sshfs) e aponte
-`recording_dir` para o ponto de montagem. Nada mais muda — a ferramenta apenas
-lê de `recording_dir`, então uma montagem somente leitura é suficiente:
+Gravações armazenadas em uma máquina remota podem ser processadas montando o
+diretório remoto localmente com o [sshfs](https://github.com/libfuse/sshfs) e
+informando o ponto de montagem como diretório de gravações. Como a ferramenta
+apenas lê o diretório de gravações, uma montagem somente leitura é suficiente:
 
 ```bash
 mkdir -p ~/mnt/sitio-1
@@ -366,220 +354,243 @@ sshfs usuario@host:/caminho/no/servidor ~/mnt/sitio-1 \
   -o ro,reconnect,cache=yes,kernel_cache \
   -o IdentityFile=$HOME/.ssh/sua_chave,IdentitiesOnly=yes
 
-uv run spectro-calendar ~/mnt/sitio-1 \
+spectro-calendar ~/mnt/sitio-1 \
   --output-dir ~/calendarios/sitio-1 \
   --use-ffmpeg --include-audio
 ```
 
-**Acertando o caminho remoto.** O `sshfs` conversa com o *subsistema SFTP* do
-servidor SSH, cuja visão do sistema de arquivos frequentemente não é a mesma de
-um shell de login — NAS em particular costumam expor as pastas compartilhadas
-na raiz do SFTP. Um caminho que funciona com `scp` pode, portanto, falhar com
-`sshfs`, especialmente em clientes OpenSSH anteriores à versão 9.0, em que o
-`scp` roda sobre o shell remoto em vez de SFTP. Pergunte direto ao SFTP em vez
-de adivinhar:
+**Determinação do caminho remoto.** O sshfs usa o subsistema SFTP do servidor
+SSH, cuja visão do sistema de arquivos frequentemente difere da de um shell de
+login. Dispositivos NAS, em particular, costumam apresentar as pastas
+compartilhadas na raiz do SFTP. Um caminho que funciona com `scp` pode,
+portanto, falhar com o sshfs, especialmente em clientes OpenSSH anteriores à
+versão 9.0, nos quais o `scp` usa o shell remoto em vez do SFTP. O caminho
+correto pode ser obtido diretamente pelo SFTP:
 
 ```bash
 sftp usuario@host
-sftp> pwd     # onde o SFTP acha que você está
-sftp> ls /    # o que realmente existe na raiz do SFTP
+sftp> pwd     # o diretório atual, segundo o SFTP
+sftp> ls /    # o conteúdo da raiz do SFTP
 ```
 
-Em um Synology, por exemplo, o shell pode reportar `/volume1/homes/voce`
-enquanto o SFTP coloca a pasta compartilhada em `/Recordings/sitio-1` — e é
-este último que o `sshfs` precisa. Coloque todo o argumento `usuario@host:caminho`
-entre aspas se o caminho remoto contiver espaços ou caracteres acentuados; a
-montagem os esconde do HTML gerado, então o que aparece nos links de áudio são
-os nomes locais do ponto de montagem.
+Em um dispositivo Synology, por exemplo, o shell pode informar
+`/volume1/homes/usuario`, enquanto o SFTP apresenta a pasta compartilhada como
+`/Gravacoes/sitio-1`; o sshfs requer este último. O argumento
+`usuario@host:caminho` inteiro deve estar entre aspas quando o caminho remoto
+contiver espaços ou caracteres acentuados. A página gerada referencia as
+gravações pelo ponto de montagem local, de modo que os nomes remotos não
+aparecem nela.
 
-Gerar os espectrogramas puxa cada WAV selecionado pela rede uma vez — essa é a
-parte lenta, e não há como evitá-la, já que cada arquivo precisa ser lido por
-inteiro para calcular seu espectrograma. Os filtros de data/hora (`--dates` ou
-`--start-date`/`--end-date`, `--start-time`/`--end-time`, `--time-step`) são a
-alavanca para reduzir essa transferência. Tudo que é escrito — PNGs, HTML, CSS
-— fica localmente em `--output-dir`.
+A geração dos espectrogramas transfere cada gravação selecionada pela conexão
+uma vez. Essa é a parte mais lenta do processo e não pode ser evitada, pois
+cada arquivo precisa ser lido por completo para o cálculo do seu
+espectrograma. Os filtros de data e horário (`--dates` ou
+`--start-date`/`--end-date`, `--start-time`/`--end-time`, `--time-step`) são
+o meio de reduzir a transferência. Todos os arquivos gerados são gravados
+localmente, em `--output-dir`.
 
-**Reproduzir o áudio não exige baixá-lo.** Com `--include-audio`, o elemento
-`<audio>` de cada célula transmite direto através da montagem e usa
-`preload="none"`, de modo que o navegador busca apenas a gravação em que você
-efetivamente apertar play, e apenas até onde você ouvir — abrir o calendário em
-si não custa transferência nenhuma. Nada é copiado para o disco local além do
-cache de páginas do sistema operacional. Note que WAV não é comprimido (um
-minuto de AudioMoth a 48 kHz tem cerca de 23 MB), então a reprodução é
-confortável em LAN ou VPN e pode travar em uma conexão lenta.
+**A reprodução não exige baixar as gravações.** Com `--include-audio`, cada
+player de áudio lê a sua gravação através da montagem, e `preload="none"`
+garante que somente as gravações efetivamente reproduzidas sejam transferidas,
+e apenas até o ponto em que são ouvidas. Abrir o calendário em si não
+transfere nada. Como WAV é um formato sem compressão (um minuto de áudio do
+AudioMoth a 48 kHz ocupa aproximadamente 23 MB), a reprodução é confortável em
+uma rede local ou VPN, mas pode travar em uma conexão lenta.
 
-Dois pontos de atenção:
+Dois pontos adicionais se aplicam:
 
-- Abra o `index_<label>.html` direto do disco (`file://`). O caminho relativo
-  de `--output-dir` de volta para a montagem aponta para fora do diretório de
-  saída (ex.: `../../mnt/sitio-1/20260304_100000.WAV`), então servir o
-  `--output-dir` com algo como `python -m http.server` não vai conseguir
-  resolver o áudio, mesmo que as miniaturas continuem carregando — esse
-  servidor se recusa a servir caminhos acima da sua raiz.
-- Se a conexão cair, `-o reconnect` restaura a montagem, mas qualquer leitura
-  em andamento falha antes; rode o comando novamente para preencher os
-  espectrogramas que faltaram. Desmonte com `fusermount -u ~/mnt/sitio-1`.
+- O calendário deve ser aberto diretamente do disco (`file://`). O caminho
+  relativo do diretório de saída até o ponto de montagem sai do diretório de
+  saída (por exemplo, `../../mnt/sitio-1/20260304_100000.WAV`), de modo que um
+  servidor web iniciado no diretório de saída, como `python -m http.server`,
+  não consegue servir o áudio, embora as miniaturas carreguem normalmente.
+- Se a conexão for interrompida, `-o reconnect` restabelece a montagem, mas as
+  leituras em andamento falham primeiro. Executar o comando novamente gera os
+  espectrogramas que faltaram; com o backend ffmpeg, como no exemplo acima, os
+  espectrogramas existentes são mantidos e não são transferidos novamente. A
+  montagem é removida com `fusermount -u ~/mnt/sitio-1`.
 
-## Como funciona
+## Funcionamento
 
-Toda a pipeline está em `src/spectro_calendar/cli.py`. Executar o comando roda
-estas etapas, nesta ordem:
+Todo o processamento está implementado em `src/spectro_calendar/cli.py`. Uma
+execução consiste nas seguintes etapas:
 
-1. **Interpretação dos argumentos** — o `argparse` monta a interface de CLI
-   documentada na tabela acima e valida/normaliza os tipos informados pelo
-   usuário (ex.: `Path` para o diretório de gravações, `int` para as
-   frequências). Antes da interpretação real, uma primeira passagem rápida
-   extrai o `--config` (se informado), e `load_yaml_config` lê esse arquivo
-   YAML (rejeitando chaves desconhecidas) e instala seus valores como os novos
-   padrões do parser, via `parser.set_defaults(**config)`. Como o argparse só
-   recorre a um padrão quando a flag não está presente na linha de comando,
-   qualquer flag que o usuário *de fato* passe em argv vence tanto o arquivo de
-   configuração quanto o padrão embutido. `recording_dir` é obrigatório neste
-   ponto (seja como argumento posicional, seja pela chave `recording_dir` da
-   configuração).
+1. **Leitura dos argumentos.** O `argparse` define as opções listadas acima e
+   converte os seus valores para os tipos adequados. Antes da leitura
+   principal, uma passagem preliminar extrai `--config`; `load_yaml_config` lê
+   esse arquivo, rejeita chaves desconhecidas e instala os seus valores como
+   padrões do parser com `parser.set_defaults(**config)`. Como o argparse usa
+   um padrão somente para opções ausentes da linha de comando, qualquer opção
+   informada na linha de comando tem precedência tanto sobre o arquivo de
+   configuração quanto sobre o padrão embutido.
 
-2. **Limpeza opcional** — se `--clear` for passado, os arquivos
-   `*<spec-label>.png` existentes no diretório de saída (`--output-dir`, se
-   informado, senão `recording_dir`) são apagados antes, para que
-   espectrogramas antigos de uma execução com outros parâmetros não fiquem
-   pendurados.
+2. **Limpeza opcional.** Com `--clear`, os arquivos `*<label>.png` existentes
+   no diretório de saída são apagados, para que espectrogramas de uma execução
+   anterior com parâmetros diferentes não permaneçam.
 
-3. **Descoberta dos arquivos** — todo arquivo `.wav` (sem distinção de
-   maiúsculas/minúsculas) diretamente dentro de `recording_dir` é listado; com
-   `--recursive`, as subpastas também são percorridas. Com `--filename-prefix`
-   definido, os arquivos cujo radical não começa com ele são descartados.
-   `parse_recording_datetime` remove `--filename-prefix` do radical de cada
-   nome e interpreta o restante com `datetime.strptime(stem, --datetime-format)`,
-   construindo um mapeamento `{caminho_wav: datetime}`; qualquer nome que não
-   corresponda encerra o programa com um erro identificando-o. Os arquivos são
-   então ordenados cronologicamente por essa data/hora interpretada (não pelo
-   nome), e `get_available_dates` / `get_available_times` derivam dali os
-   valores distintos de `AAAAMMDD`/`HHMMSS` para uso nas etapas seguintes —
-   desacoplando toda a lógica posterior de data/hora da convenção original de
-   nomes.
+3. **Descoberta dos arquivos.** Todos os arquivos `.wav` (sem distinção entre
+   maiúsculas e minúsculas) do diretório de gravações são listados, incluindo
+   as subpastas com `--recursive`. Quando `--filename-prefix` é definido, os
+   arquivos sem esse prefixo são excluídos. `parse_recording_datetime` remove
+   o prefixo do radical de cada nome de arquivo e interpreta o restante com
+   `datetime.strptime` e `--datetime-format`; um nome de arquivo que não
+   corresponde interrompe a execução com um erro que identifica o arquivo. Os
+   arquivos são então ordenados pela data e hora interpretadas, e não pelo
+   nome, e todas as etapas seguintes dependem somente desses valores, e não da
+   convenção de nomes.
 
-4. **Filtragem por data** — se `--dates` foi informado, esses valores são
-   conferidos contra as datas realmente presentes (`validate_dates` levanta
-   erro se alguma data pedida não tiver gravações). Se em vez disso foram
-   informados `--start-date`/`--end-date`, `filter_dates_by_range` mantém as
-   datas descobertas dentro desse intervalo inclusivo — os próprios limites não
-   precisam ter gravações, e qualquer um deles pode ser omitido para deixar
-   aquela ponta aberta, mas a execução é abortada se o intervalo não selecionar
-   nada. As duas formas são mutuamente exclusivas; sem nenhuma delas, todas as
-   datas descobertas são usadas.
+4. **Filtragem por data.** As datas informadas com `--dates` são comparadas com
+   as datas presentes (`validate_dates` informa qualquer data sem gravações).
+   Com `--start-date`/`--end-date`, `filter_dates_by_range` mantém as datas
+   dentro do intervalo inclusivo; os limites não precisam ter gravações,
+   qualquer um deles pode ser omitido, e a execução é interrompida se o
+   intervalo não contiver gravações. As duas formas são mutuamente exclusivas;
+   sem nenhuma delas, todas as datas são usadas.
 
-5. **Filtragem por horário do dia** — `filter_wav_files_by_time_window` mantém
-   apenas os arquivos cujo horário cai dentro de `[--start-time, --end-time]`
-   em cada data selecionada (essa janela é sempre aplicada, usando os padrões
-   permissivos de 00:00:00–23:59:00 quando não personalizada).
+5. **Filtragem por horário.** `filter_wav_files_by_time_window` mantém os
+   arquivos cujo horário está entre `--start-time` e `--end-time` em cada data
+   selecionada. Essa janela é sempre aplicada, com padrões que incluem o dia
+   inteiro.
 
-6. **Subamostragem temporal** — se `--time-step` estiver definido,
-   `filter_wav_files_by_time_step` percorre os arquivos restantes de cada dia em
-   ordem cronológica e mantém apenas o primeiro arquivo em/depois do horário do
-   último arquivo mantido mais `N` minutos — transformando, por exemplo, uma
-   gravação por minuto em uma a cada 30 minutos, sem exigir que as gravações
-   caiam em marcos exatos do relógio.
+6. **Redução por intervalo de tempo.** Com `--time-step`,
+   `filter_wav_files_by_time_step` percorre os arquivos de cada dia em ordem
+   cronológica e mantém o primeiro arquivo no horário mantido anteriormente
+   mais N minutos, ou depois dele. Isso reduz, por exemplo, uma gravação por
+   minuto a uma a cada 30 minutos, sem exigir que as gravações comecem em
+   horários exatos.
 
-7. **Geração dos espectrogramas** — cada arquivo restante é entregue a um de
-   dois backends intercambiáveis (`--use-ffmpeg` seleciona o do ffmpeg, desde
-   que o binário `ffmpeg` seja encontrado via `shutil.which`; caso contrário o
-   scipy é usado, independentemente da flag). Ambos os backends escrevem seus
-   PNGs no diretório de saída (`--output-dir`, se informado, senão
-   `recording_dir`) — o diretório de origem dos WAVs nunca é escrito quando
-   `--output-dir` está definido:
-   - **`spectrogram_ffmpeg`** chama, via `subprocess.run`, o filtro
-     `showspectrumpic` do ffmpeg encadeado com um filtro `scale`, de modo que a
-     miniatura é renderizada diretamente do WAV em uma única chamada. Com
-     `--save-fullsize`, ele roda duas vezes: uma para renderizar o PNG em
-     tamanho real e outra para reduzir esse PNG à miniatura. Ele pula
-     arquivos cujas imagens solicitadas já existam.
-   - **`spectrogram_scipy`** lê o WAV com `scipy.io.wavfile`, converte estéreo
-     em mono, calcula uma transformada de Fourier de tempo curto
-     (`scipy.signal.stft`, `nperseg=2048`), aplica uma máscara para
-     `[--lowest-freq, --highest-freq]` e renderiza o espectrograma de magnitude
-     logarítmica com `matplotlib` (colormap `plasma`, eixos ocultos). O PNG em
-     tamanho real (mantido em memória, a menos que `--save-fullsize` esteja
-     ativo) é então redimensionado com o `Pillow` para produzir a miniatura.
+7. **Geração dos espectrogramas.** Cada arquivo restante é processado por um
+   de dois backends intercambiáveis. `--use-ffmpeg` seleciona o backend ffmpeg
+   quando o programa `ffmpeg` é encontrado (`shutil.which`); caso contrário, o
+   backend scipy é usado. Ambos gravam as suas imagens no diretório de saída:
+   - **`spectrogram_ffmpeg`** executa o filtro `showspectrumpic` do ffmpeg,
+     encadeado com um filtro `scale`, de modo que a miniatura é produzida a
+     partir da gravação em uma única chamada. Com `--save-fullsize`, o ffmpeg
+     é executado duas vezes: uma para produzir a imagem em tamanho real e
+     outra para reduzi-la à miniatura. Gravações cujas imagens solicitadas já
+     existem são ignoradas.
+   - **`spectrogram_scipy`** lê a gravação com `scipy.io.wavfile`, converte
+     gravações estéreo em mono, calcula uma transformada de Fourier de tempo
+     curto (`scipy.signal.stft`, `nperseg=2048`), restringe-a ao intervalo
+     entre `--lowest-freq` e `--highest-freq` e plota a magnitude em decibéis
+     com o matplotlib (mapa de cores `plasma`, sem eixos). A imagem em tamanho
+     real, mantida em memória a menos que `--save-fullsize` seja informado, é
+     então reduzida à miniatura com o Pillow. Imagens existentes são geradas
+     novamente.
 
-   Quando `--max-cores` é maior que 1, os arquivos são distribuídos em um pool
-   `concurrent.futures.ProcessPoolExecutor` desse tamanho, em vez de serem
-   processados um a um; o backend ffmpeg paraleliza bem porque cada worker fica
-   limitado por E/S, esperando um subprocesso, enquanto o backend scipy se
-   beneficia de paralelismo real de CPU entre processos. Veja a tabela de
-   benchmark no docstring do módulo `cli.py` para a vazão medida dos dois
-   backends com 1/2/4/6 núcleos.
+   Uma gravação que não pode ser lida, como um arquivo truncado quando o cartão
+   de memória de um gravador encheu, é informada no fim da execução e recebe
+   uma célula vazia, sem interromper a execução. Quando `--max-cores` é maior
+   que 1, as gravações são distribuídas em um
+   `concurrent.futures.ProcessPoolExecutor` desse tamanho. O backend ffmpeg se
+   beneficia porque cada processo passa a maior parte do tempo aguardando o
+   seu ffmpeg, e o backend scipy porque o cálculo é executado em vários
+   processos ao mesmo tempo. A docstring do módulo `cli.py` contém tempos de
+   processamento medidos para os dois backends com 1, 2, 4 e 6 processos.
 
-8. **Geração do calendário HTML** — `generate_html` monta uma busca
-   `{(data, hora): caminho_wav}` a partir do mapeamento `file_dates` dos
-   arquivos *processados* e então escreve `index_<spec-label>.html`: uma tabela
-   HTML com cabeçalho e primeira coluna fixos, uma coluna por data e uma linha
-   por horário do dia, entre um cabeçalho de página fixo (`spectro-calendar`) e
-   um rodapé (um link `~/biodiversica` para https://biodiversica.xyz/). Cada célula ou mostra a miniatura correspondente (nomeada
-   segundo o radical real daquele arquivo, qualquer que seja sua convenção de
-   nome), com um player `<audio>` adicionado quando `--include-audio` está
-   ativo, ou fica em branco se não houver gravação para aquela combinação de
-   data/hora. Esses players são emitidos com `preload="none"`: sem isso, o
-   navegador lê o cabeçalho de cada WAV ao carregar a página só para exibir a
-   duração, o que em um calendário grande (um mês com espaçamento de 15 minutos
-   dá cerca de 3000 células) trava a página muito antes de você clicar em
-   qualquer coisa — de forma severa quando as gravações estão em uma montagem de
-   rede. O `src` da miniatura é um nome de arquivo relativo simples dentro do
-   diretório de saída; o `src` do `<audio>` é calculado com `os.path.relpath`
-   do diretório de saída de volta para `recording_dir`, de modo que os dois
-   diretórios não precisam estar aninhados um no outro.
+8. **Geração do calendário.** `generate_html` constrói uma correspondência
+   entre a data e a hora de cada gravação processada e o seu arquivo, e grava
+   `index_<label>.html` em UTF-8. A página é composta por um cabeçalho fixo
+   (`spectro-calendar`), as barras de ferramentas opcionais, uma tabela com
+   uma coluna por data e uma linha por horário do dia, cuja linha de cabeçalho
+   e primeira coluna permanecem visíveis durante a rolagem, e um rodapé com um
+   link para [biodiversica.xyz](https://biodiversica.xyz/). Cada célula exibe
+   a miniatura correspondente, acompanhada de um player de áudio quando
+   `--include-audio` é informado, ou fica vazia quando não existe gravação
+   para aquela data e horário.
 
-   Com `--annotate`, cada uma dessas células leva também uma caixa de seleção
-   marcada com o caminho da gravação relativo a `recording_dir` e seu
-   timestamp já interpretado, e a página ganha uma barra de ferramentas mais o
-   handler `ANNOTATION_SCRIPT` embutido no fim do body (embutido em vez de um
-   arquivo `.js` ao lado, para que o calendário continue sendo uma página que
-   pode ser movida ou compartilhada sozinha). O script é JavaScript puro e
-   autossuficiente: monta o texto da exportação a partir desses atributos de
-   dados e o entrega ao navegador como um download `Blob`, aplica os
-   intervalos de Shift+clique usando a linha e a coluna de cada caixa na
-   tabela (`rowIndex`/`cellIndex`), e espelha o
-   conjunto marcado no `localStorage` — com todo acesso ao armazenamento
-   envolvido em `try`/`catch`, já que uma página `file://` no Chrome tem o
-   acesso negado e precisa continuar funcionando mesmo assim.
+   Os players usam `preload="none"`. Sem isso, o navegador lê o cabeçalho de
+   todas as gravações ao abrir a página, apenas para exibir a sua duração; em
+   um calendário grande (um mês com intervalos de 15 minutos tem cerca de 3000
+   células), isso atrasa consideravelmente a página, sobretudo quando as
+   gravações estão em uma montagem de rede. Os endereços das imagens e dos
+   áudios são calculados por `html_link` em relação ao diretório de saída, de
+   modo que o diretório de saída e o diretório de gravações não precisam estar
+   aninhados. Cada segmento do caminho é codificado, de modo que nomes com
+   espaços, acentos ou símbolos como `#` funcionam corretamente; quando não
+   existe caminho relativo (unidades diferentes no Windows), um endereço
+   absoluto `file://` é usado.
 
-9. **Style sheet** — o CSS embutido em `SPECTROGRAM_TABLE_CSS` é escrito
-   como `spectrogram-table.css` ao lado do arquivo HTML, no mesmo destino
-   `--output-dir`/`recording_dir` (cabeçalhos fixos, contêiner de rolagem,
-   destaque alternado de semanas/horas), para que o `index_<label>.html` gerado
-   renderize corretamente quando aberto diretamente do disco.
+   Com `--speed-control`, a página inclui o seletor de velocidade e o script
+   `SPEED_SCRIPT`. Com `--annotate`, cada célula inclui também uma caixa de
+   seleção que carrega o caminho da gravação relativo ao diretório de
+   gravações e o seu carimbo de data e hora, e a página inclui a barra de
+   ferramentas e o script `ANNOTATION_SCRIPT`. Os dois scripts são embutidos na
+   página, em vez de gravados como arquivos `.js` separados, para que o
+   calendário continue sendo uma única página que pode ser movida ou
+   compartilhada. Eles usam JavaScript simples, sem bibliotecas. O script de
+   anotação monta o texto exportado a partir dos atributos das caixas de
+   seleção e o oferece como download, aplica os intervalos de Shift+clique
+   usando a linha e a coluna de cada caixa e armazena a seleção no
+   `localStorage`. Todo acesso ao armazenamento é protegido, pois o Chrome
+   nega armazenamento a páginas `file://` e a página deve continuar
+   funcionando nesse caso.
 
-10. **Cronometragem** — o tempo total de execução é medido com `time.time()` e
-    exibido ao final, seguindo a mesma metodologia usada para produzir a tabela
-    de benchmark ffmpeg-vs-scipy no docstring do módulo.
+9. **Folha de estilos.** O CSS de `SPECTROGRAM_TABLE_CSS` é gravado como
+   `spectrogram-table.css` ao lado da página do calendário, para que a página
+   seja exibida corretamente quando aberta diretamente do disco.
+
+10. **Tempo de execução.** O tempo total de processamento é medido e exibido no
+    fim da execução, pelo mesmo método usado na comparação de backends da
+    docstring do módulo.
 
 ## Backends
 
 | | ffmpeg | scipy |
 |---|---|---|
-| Velocidade | Mais rápido (veja o benchmark em `cli.py`) | Mais lento, Python puro |
-| Dependência | Exige o binário `ffmpeg` no `PATH` | Apenas pacotes Python (`scipy`, `matplotlib`, `pillow`) |
-| Paleta de cores | Configurável via `--color-choice` | Fixa em `plasma` |
-| Escala de frequência | Configurável via `--freq-scale` (`lin`/`log`) | Apenas linear |
+| Velocidade | Mais rápido (veja as medições em `cli.py`) | Mais lento |
+| Requisitos | O programa `ffmpeg` no PATH | Somente pacotes Python (`scipy`, `matplotlib`, `pillow`) |
+| Paleta de cores | Configurável com `--color-choice` | Sempre `plasma` |
+| Escala de frequência | Configurável com `--freq-scale` (`lin` ou `log`) | Somente linear |
 
-Se `--use-ffmpeg` for passado mas o ffmpeg não for encontrado, a ferramenta
-volta automaticamente ao backend scipy.
+Se `--use-ffmpeg` for informado mas o ffmpeg não for encontrado, o backend
+scipy é usado automaticamente.
 
 ## Desenvolvimento
 
 ```bash
-uv sync --group dev
-uv run ruff check .
+uv sync               # instala o projeto e as ferramentas de desenvolvimento
+uv run ruff check .   # verificação de estilo
+uv run pytest         # testes
 ```
+
+Os testes geram gravações sintéticas curtas, executam a ferramenta completa
+sobre elas e inspecionam os arquivos gerados. O teste do backend ffmpeg é
+ignorado quando o ffmpeg não está instalado. A integração contínua executa a
+verificação de estilo e os testes no Linux, no macOS e no Windows, e executa
+também os instaladores nos três sistemas com o pacote gerado.
 
 Estrutura do projeto:
 
 ```
 src/spectro_calendar/
 ├── __init__.py   # versão do pacote
-├── __main__.py   # habilita `python -m spectro_calendar`
-└── cli.py        # interpretação dos argumentos + pipeline completo de processamento
+├── __main__.py   # permite `python -m spectro_calendar`
+├── cli.py        # leitura dos argumentos e todo o processamento
+└── richhelp.py   # saída formatada de --help
+tests/            # testes de ponta a ponta
+scripts/          # instaladores anexados a cada versão
 ```
+
+### Publicação de uma Versão
+
+Defina a nova versão tanto em `pyproject.toml` quanto em
+`src/spectro_calendar/__init__.py`, execute `uv lock`, faça o commit da
+alteração e, em seguida, crie e envie uma tag:
+
+```bash
+git tag v0.2.0 && git push origin v0.2.0
+```
+
+A tag dispara `.github/workflows/release.yml`. Os testes são executados nos
+três sistemas, o pacote é enviado ao PyPI e uma versão **em rascunho** é
+criada no GitHub, com os instaladores anexados e as notas de
+`.github/release-notes.md`. Depois que os destaques forem escritos, a versão
+deve ser publicada, pois os comandos de instalação baixam da versão
+*publicada* mais recente. A compilação falha se a tag não corresponder à
+versão em `pyproject.toml`, ou se essa versão for diferente da versão em
+`src/spectro_calendar/__init__.py`.
 
 ## Licença
 
-MIT — veja [LICENSE](LICENSE).
+MIT; veja [LICENSE](LICENSE).
