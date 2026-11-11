@@ -49,7 +49,9 @@ Pipeline overview (see ``main()`` for the orchestration):
    directory. With ``--annotate``, each cell also gets a checkbox and the
    page a toolbar (``ANNOTATION_SCRIPT``) that downloads the checked
    recordings as a plain ``.txt`` list -- the filename itself acting as the
-   annotation label.
+   annotation label. With ``--speed-control``, the page also gets a playback
+   speed selector (``SPEED_SCRIPT``) that slows the players down without
+   pitch correction, i.e. time expansion for listening to ultrasound.
 
 Parallel processing computation time (Lenovo ThinkPad X1 Carbon 7th generation)
 - 107 wav files of 1min (23MB each)
@@ -184,7 +186,9 @@ tfoot th:first-child {
 }
 
 /* Annotation mode (--annotate): per-cell checkboxes plus the export toolbar.
-   These rules are harmless when the flag is off, since nothing uses them. */
+   The playback speed bar (--speed-control) shares the toolbar look.
+   These rules are harmless when the flags are off, since nothing uses them. */
+.speed-bar,
 .annotate-bar {
   flex: 0 0 auto;
   display: flex;
@@ -205,10 +209,15 @@ tfoot th:first-child {
   cursor: default;
   opacity: 0.45;
 }
+.speed-bar select,
 .annotate-bar select {
   font-family: inherit;
   padding: 3px;
 }
+.speed-bar + .annotate-bar {
+  border-top: 1px solid #555;
+}
+.speed-hint,
 .annotate-hint {
   opacity: 0.7;
 }
@@ -381,6 +390,52 @@ ANNOTATION_SCRIPT = r"""(function () {
   restore();
   boxes.forEach(markCell);
   refresh();
+})();
+"""
+
+# ------------------------
+# Client-side playback speed script (only embedded with --speed-control)
+# ------------------------
+#
+# Slows every <audio> player down the way Audacity's "Change Speed" does:
+# the browser resamples instead of time-stretching (preservesPitch = false),
+# so pitch drops along with speed. That is plain time expansion, which brings
+# ultrasound (e.g. bat calls) down into the audible range -- 40 kHz played at
+# 1/10 speed is heard at 4 kHz. Nothing is decoded or processed here; it only
+# sets two standard HTMLMediaElement properties, so it costs nothing until a
+# player is used. Each player gets the rate when it starts ('play' doesn't
+# bubble, hence the capturing listener), and defaultPlaybackRate is set too
+# because a media element falls back to it whenever its source (re)loads.
+SPEED_SCRIPT = """\
+(function () {
+  var select = document.getElementById('speed-select');
+  var hint = document.getElementById('speed-hint');
+
+  function rate() {
+    return parseFloat(select.value) || 1;
+  }
+
+  function apply(audio) {
+    var r = rate();
+    audio.preservesPitch = false;
+    audio.mozPreservesPitch = false;
+    audio.webkitPreservesPitch = false;
+    audio.defaultPlaybackRate = r;
+    audio.playbackRate = r;
+  }
+
+  function update() {
+    Array.prototype.forEach.call(document.querySelectorAll('audio'), apply);
+    var r = rate();
+    var round = function (x) { return Math.round(x * 100) / 100; };
+    hint.textContent = r === 1 ? '' : '40 kHz plays as ' + round(40 * r) + ' kHz, 1 min lasts ' + round(1 / r) + ' min';
+  }
+
+  document.addEventListener('play', function (e) {
+    if (e.target.tagName === 'AUDIO') apply(e.target);
+  }, true);
+  select.addEventListener('change', update);
+  update();
 })();
 """
 
@@ -832,7 +887,7 @@ def spectrogram_ffmpeg(
 # HTML generation (creating the table)
 # ------------------------
 
-def generate_html(wav_files, file_dates, spec_label, rec_dir, out_dir, cell_width, cell_height, flag_audio=False, flag_annotate=False):
+def generate_html(wav_files, file_dates, spec_label, rec_dir, out_dir, cell_width, cell_height, flag_audio=False, flag_annotate=False, flag_speed=False):
     """
     Generates an HTML table to display spectrograms.
 
@@ -848,6 +903,9 @@ def generate_html(wav_files, file_dates, spec_label, rec_dir, out_dir, cell_widt
         flag_annotate (bool): Turn the calendar into a lightweight annotation
             tool -- a checkbox under each thumbnail plus a toolbar that
             exports the checked recordings as a plain .txt list
+        flag_speed (bool): Add a playback speed selector that slows the
+            players down without pitch correction (time expansion, for
+            listening to ultrasound). Only meaningful with flag_audio.
     """
     # Look up each WAV file by its (date, time) key, regardless of the
     # original filename format/prefix, so the table only depends on the
@@ -875,6 +933,21 @@ def generate_html(wav_files, file_dates, spec_label, rec_dir, out_dir, cell_widt
         f.write("<!DOCTYPE html>\n<html>\n<head>\n")
         f.write('<link rel="stylesheet" type="text/css" href="spectrogram-table.css">\n')
         f.write("</head>\n<body>\n")
+
+        flag_speed = flag_speed and flag_audio
+        if flag_speed:
+            # Like the annotation toolbar, kept above the scrolling table.
+            # 1/16 is the lowest rate browsers reliably play (Firefox mutes
+            # below it), which is plenty: 1/10 is the usual bat-detector factor.
+            f.write('<div class="speed-bar">\n')
+            f.write('<label for="speed-select">Playback speed</label>\n')
+            f.write('<select id="speed-select">\n')
+            for value, text in (("1", "1&times; (normal)"), ("0.5", "1/2"), ("0.25", "1/4"),
+                                ("0.125", "1/8"), ("0.1", "1/10"), ("0.0625", "1/16")):
+                f.write(f'<option value="{value}">{text}</option>\n')
+            f.write('</select>\n')
+            f.write('<span class="speed-hint" id="speed-hint"></span>\n')
+            f.write('</div>\n')
 
         if flag_annotate:
             # Toolbar first in the body's flex column, so it stays on screen
@@ -949,6 +1022,8 @@ def generate_html(wav_files, file_dates, spec_label, rec_dir, out_dir, cell_widt
         f.write("</tbody></table></div>\n")
         if flag_annotate:
             f.write(f"<script>\n{ANNOTATION_SCRIPT}</script>\n")
+        if flag_speed:
+            f.write(f"<script>\n{SPEED_SCRIPT}</script>\n")
         f.write("</body></html>\n")
 
     print("index.html generated")
@@ -1034,6 +1109,7 @@ def main():
     parser.add_argument("--max-cores", type=int, default=4, help="Maximum number of cores in parallel processing")
     parser.add_argument("--clear", action="store_true", help="Clear existing spectrograms before creating new ones")
     parser.add_argument("--include-audio", action="store_true", help="Include audio player below each spectrogram image")
+    parser.add_argument("--speed-control", action="store_true", help="Add a playback speed selector (1x down to 1/16) for the audio players. Slowing down lowers the pitch too, like Audacity's 'Change Speed' (time expansion), so ultrasound such as bat calls becomes audible. Requires --include-audio")
     parser.add_argument("--annotate", action="store_true", help="Annotation mode: add a checkbox below each spectrogram and a toolbar to export the checked recordings as a .txt list (filename and/or date & time, one per line)")
     parser.add_argument("--dates", nargs='*', default=None, help="Specify specific dates in the format YYYYMMDD (default: all)")
     parser.add_argument("--start-date", default=None, type=str, help="First date to include, in YYYYMMDD format (default: earliest available). Cannot be combined with --dates")
@@ -1176,7 +1252,9 @@ def main():
         fatal(f"None of the {len(wav_files)} recordings could be read (e.g. {failed[0][0]}: {failed[0][1]})")
 
     cell_size = args.thumbnail_scale.split(':')
-    generate_html(wav_files, file_dates, args.spec_label, rec_dir, out_dir, cell_width=cell_size[0], cell_height=cell_size[1], flag_audio=args.include_audio, flag_annotate=args.annotate)
+    if args.speed_control and not args.include_audio:
+        print("Warning: --speed-control has no effect without --include-audio; no speed selector added.")
+    generate_html(wav_files, file_dates, args.spec_label, rec_dir, out_dir, cell_width=cell_size[0], cell_height=cell_size[1], flag_audio=args.include_audio, flag_annotate=args.annotate, flag_speed=args.speed_control)
 
     # Create and write the CSS file
     css_path = out_dir / "spectrogram-table.css"

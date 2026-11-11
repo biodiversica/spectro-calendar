@@ -40,6 +40,10 @@ save_fullsize: false
 # Behavior flags.
 clear: false
 include_audio: true
+# Set to true to add a playback speed selector (1x down to 1/16) above the
+# calendar. Slowing down also lowers the pitch, like Audacity's "Change
+# Speed", so ultrasound (e.g. bat calls) becomes audible. Needs include_audio.
+speed_control: false
 # Set to true to add a checkbox under each spectrogram plus a toolbar that
 # exports the checked recordings as a .txt list (annotation mode).
 annotate: false

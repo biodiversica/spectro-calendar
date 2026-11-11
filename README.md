@@ -227,6 +227,7 @@ list of valid keys) rather than silently ignored.
 | `--save-fullsize` | off | Also save the full-size spectrogram PNG next to each thumbnail. Off by default: the calendar only uses thumbnails, and full-size PNGs take far more disk space |
 | `--clear` | off | Delete existing `*<label>.png` files in the output directory before generating new ones |
 | `--include-audio` | off | Embed an `<audio>` player under each thumbnail, linking back to the matching WAV in `recording_dir`. Players carry `preload="none"`, so a recording is fetched only when you press play on it |
+| `--speed-control` | off | Add a playback speed selector (1× down to 1/16) above the calendar. Slowing down lowers the pitch too, like Audacity's "Change Speed", so ultrasound becomes audible (see [Listening to ultrasound](#listening-to-ultrasound)). Requires `--include-audio` |
 | `--annotate` | off | Annotation mode: add a checkbox under each thumbnail and a toolbar that exports the checked recordings as a `.txt` list (see [Annotation mode](#annotation-mode)) |
 | `--dates D1 D2 ...` | all dates | Restrict processing to specific `YYYYMMDD` dates (validated against dates actually present, using the parsed recording date regardless of filename format) |
 | `--start-date YYYYMMDD` | earliest available | First date to include; selects a contiguous range instead of an explicit list. Cannot be combined with `--dates` |
@@ -248,6 +249,28 @@ uv run spectro-calendar /data/site-1 \
   --spec-label lf --highest-freq 2000 \
   --time-step 30 --start-time 050000 --end-time 090000
 ```
+
+### Listening to ultrasound
+
+`--speed-control` adds a **Playback speed** selector above the calendar
+(1×, 1/2, 1/4, 1/8, 1/10, 1/16) that applies to every audio player:
+
+```bash
+uv run spectro-calendar /data/site-1 --include-audio --speed-control
+```
+
+Slowing down works like Audacity's "Change Speed", not like a
+pitch-preserving tempo change: the pitch drops by the same factor as the
+speed. This is time expansion, the usual way to hear ultrasound, so a 40 kHz
+bat call played at 1/10 speed is heard at 4 kHz and a one-minute recording
+lasts ten minutes. The selector shows that conversion for the chosen speed.
+
+Under the hood it only sets the browser's own `playbackRate` and
+`preservesPitch` on each `<audio>` element. Nothing is decoded or processed
+in the page, and players still load nothing until you press play. The
+recordings need a sample rate high enough to hold the ultrasound in the first
+place (e.g. AudioMoth at 250 or 384 kHz). 1/16 is the slowest speed browsers
+play reliably.
 
 ### Annotation mode
 

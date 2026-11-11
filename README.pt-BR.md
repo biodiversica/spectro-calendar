@@ -234,6 +234,7 @@ lista de chaves válidas), em vez de ser silenciosamente ignorada.
 | `--save-fullsize` | desligado | Grava também o PNG do espectrograma em tamanho real ao lado de cada miniatura. Desligado por padrão: o calendário usa apenas as miniaturas, e os PNGs em tamanho real ocupam muito mais espaço em disco |
 | `--clear` | desligado | Apaga os arquivos `*<label>.png` existentes no diretório de saída antes de gerar os novos |
 | `--include-audio` | desligado | Insere um player `<audio>` sob cada miniatura, apontando para o WAV correspondente em `recording_dir`. Os players usam `preload="none"`, então uma gravação só é buscada quando você aperta play nela |
+| `--speed-control` | desligado | Acrescenta um seletor de velocidade de reprodução (de 1× até 1/16) acima do calendário. Desacelerar também abaixa o tom, como o "Change Speed" do Audacity, tornando o ultrassom audível (veja [Ouvindo ultrassom](#ouvindo-ultrassom)). Requer `--include-audio` |
 | `--annotate` | desligado | Modo de anotação: acrescenta uma caixa de seleção sob cada miniatura e uma barra que exporta as gravações marcadas como uma lista `.txt` (veja [Modo de anotação](#modo-de-anotação)) |
 | `--dates D1 D2 ...` | todas as datas | Restringe o processamento a datas `AAAAMMDD` específicas (validadas contra as datas realmente presentes, usando a data lida da gravação, qualquer que seja o formato do nome do arquivo) |
 | `--start-date AAAAMMDD` | data mais antiga disponível | Primeira data a incluir; seleciona um intervalo contíguo em vez de uma lista explícita. Não pode ser combinada com `--dates` |
@@ -255,6 +256,30 @@ uv run spectro-calendar /dados/sitio-1 \
   --spec-label lf --highest-freq 2000 \
   --time-step 30 --start-time 050000 --end-time 090000
 ```
+
+### Ouvindo ultrassom
+
+`--speed-control` acrescenta um seletor **Playback speed** acima do
+calendário (1×, 1/2, 1/4, 1/8, 1/10, 1/16) que vale para todos os players de
+áudio:
+
+```bash
+uv run spectro-calendar /dados/sitio-1 --include-audio --speed-control
+```
+
+A desaceleração funciona como o "Change Speed" do Audacity, e não como uma
+mudança de andamento que preserva o tom: o tom cai pelo mesmo fator que a
+velocidade. Isso é expansão temporal, a forma usual de ouvir ultrassom, então
+um chamado de morcego de 40 kHz tocado a 1/10 da velocidade é ouvido a 4 kHz,
+e uma gravação de um minuto dura dez minutos. O seletor mostra essa conversão
+para a velocidade escolhida.
+
+Por baixo, ele apenas define as propriedades `playbackRate` e
+`preservesPitch` do próprio navegador em cada elemento `<audio>`. Nada é
+decodificado ou processado na página, e os players continuam sem carregar
+nada até você apertar play. As gravações precisam de uma taxa de amostragem
+alta o bastante para conter o ultrassom (ex.: AudioMoth a 250 ou 384 kHz).
+1/16 é a menor velocidade que os navegadores reproduzem de forma confiável.
 
 ### Modo de anotação
 
