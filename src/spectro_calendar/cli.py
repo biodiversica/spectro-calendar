@@ -73,6 +73,7 @@ scipy  |  6	        | 90.41856098175049
 import subprocess
 import shutil
 import html
+import urllib.parse
 import io
 from pathlib import Path
 import numpy as np
@@ -86,6 +87,7 @@ import time
 from datetime import datetime
 import yaml
 
+from . import __version__
 from .richhelp import RichHelpParser, fatal
 
 
@@ -550,13 +552,13 @@ def filter_wav_files_by_time_step(wav_files, file_dates, dates_to_process, time_
 
         # Now select files that match the time step
         last_selected_dt = file_dates[date_files[0]]
-        for wav in date_files[1:]:
-            current_dt = file_dates[wav]
+        for w in date_files[1:]:
+            current_dt = file_dates[w]
             time_diff = (current_dt - last_selected_dt).total_seconds() / 60  # in minutes
 
             # If the time difference is greater than or equal to the time step, select this file
             if time_diff >= time_step_minutes:
-                filtered_files.append(wav)
+                filtered_files.append(w)
                 last_selected_dt = current_dt
 
     return filtered_files
@@ -574,12 +576,12 @@ def filter_wav_files_by_time_window(wav_files, file_dates, start_time, end_time,
         date_files = [w for w in wav_files if file_dates[w].strftime("%Y%m%d") == date]
         date_files.sort(key=lambda w: file_dates[w])  # Sort by datetime
 
-        for wav in date_files:
-            current_time = file_dates[wav].time()
+        for w in date_files:
+            current_time = file_dates[w].time()
 
             # Check if the current file's time is within the start and end time window
             if start_time <= current_time <= end_time:
-                filtered_files.append(wav)
+                filtered_files.append(w)
 
     return filtered_files
 
@@ -797,8 +799,12 @@ def spectrogram_scipy(
     fig_w, fig_h = [int(x) / 100 for x in img_size.split("x")]
     plt.figure(figsize=(fig_w, fig_h))
 
-    # Display the spectrogram
-    plt.pcolormesh(t, f[freq_mask], 10 * np.log10(spectrogram), shading='auto', cmap='plasma')
+    # Display the spectrogram. Silent bins (e.g. digital silence, or nothing
+    # above the recorder's filter) are log10(0) = -inf, which matplotlib
+    # already handles; only numpy's warning about it is silenced.
+    with np.errstate(divide="ignore"):
+        level_db = 10 * np.log10(spectrogram)
+    plt.pcolormesh(t, f[freq_mask], level_db, shading='auto', cmap='plasma')
     plt.ylabel('Frequency [Hz]')
     plt.xlabel('Time [s]')
     plt.axis("off")
@@ -889,6 +895,7 @@ def spectrogram_ffmpeg(
             "-i", str(wav_path),
             "-lavfi", f"{spectrum_filter},scale={thumbnail_scale}",
             "-v", "error",
+            "-y",
             str(thumb_img)
         ])
         return
@@ -901,6 +908,7 @@ def spectrogram_ffmpeg(
         "-i", str(wav_path),
         "-lavfi", spectrum_filter,
         "-v", "error",
+        "-y",
         str(full_img)
     ])
 
@@ -912,12 +920,38 @@ def spectrogram_ffmpeg(
         "-i", str(full_img),
         "-vf", f"scale={thumbnail_scale}",
         "-v", "error",
+        "-y",
         str(thumb_img)
     ])
 
 # ------------------------
 # HTML generation (creating the table)
 # ------------------------
+
+def html_link(target, out_dir):
+    """
+    Builds the src of an <img> or <audio> element for a file, as seen from
+    the HTML page in out_dir.
+
+    Relative when possible, so the output directory can be moved together
+    with the recordings. Windows cannot express a path to another drive (e.g.
+    recordings on D:, output on C:) relatively, so those fall back to an
+    absolute file:// URI. Each path segment is percent-encoded, so names with
+    spaces, accents, '#' or '%' still resolve.
+
+    Args:
+        target (Path): The image or recording to link to
+        out_dir (Path): Directory holding the HTML page
+
+    Returns:
+        str: A URL, already safe to place inside a quoted HTML attribute
+    """
+    try:
+        rel = os.path.relpath(target, out_dir)
+    except ValueError:
+        return Path(target).resolve().as_uri()
+    return urllib.parse.quote(Path(rel).as_posix())
+
 
 def generate_html(wav_files, file_dates, spec_label, rec_dir, out_dir, cell_width, cell_height, flag_audio=False, flag_annotate=False, flag_speed=False):
     """
@@ -961,8 +995,13 @@ def generate_html(wav_files, file_dates, spec_label, rec_dir, out_dir, cell_widt
     unique_times = sorted({key[1] for key in files_by_datetime})
 
     index = out_dir / f"index_{spec_label}.html"
-    with index.open("w") as f:
+    # UTF-8 explicitly: the platform default (e.g. cp1252 on Windows) cannot
+    # hold every filename, and the page declares the same charset.
+    with index.open("w", encoding="utf-8") as f:
         f.write("<!DOCTYPE html>\n<html>\n<head>\n")
+        f.write('<meta charset="utf-8">\n')
+        title = f"spectro-calendar {spec_label}".strip()
+        f.write(f"<title>{html.escape(title)}</title>\n")
         f.write('<link rel="stylesheet" type="text/css" href="spectrogram-table.css">\n')
         f.write("</head>\n<body>\n")
         f.write('<header class="page-header">spectro-calendar</header>\n')
@@ -1025,10 +1064,10 @@ def generate_html(wav_files, file_dates, spec_label, rec_dir, out_dir, cell_widt
                 )
 
                 if wav_for_cell is not None and img.exists():  # Check if the spectrogram image exists
-                    # Use relative paths from out_dir, even when rec_dir isn't
-                    # one of its ancestors (e.g. a separate --output-dir)
-                    img_rel_path = os.path.relpath(img, out_dir)
-                    wav_rel_path = os.path.relpath(wav_for_cell, out_dir)
+                    # Relative to out_dir, even when rec_dir isn't one of its
+                    # ancestors (e.g. a separate --output-dir)
+                    img_rel_path = html_link(img, out_dir)
+                    wav_rel_path = html_link(wav_for_cell, out_dir)
 
                     # Add image, player and annotation checkbox
                     f.write(f'<td><img src="{img_rel_path}" width="{cell_width}" height="{cell_height}"><br>')
@@ -1127,6 +1166,7 @@ def main():
 
     parser = RichHelpParser(description="Generate a spectrogram calendar from WAV recordings")
     parser.add_argument("recording_dir", type=Path, nargs="?", default=None, help="Directory containing .wav recordings (required, unless set via 'recording_dir' in --config)")
+    parser.add_argument("--version", action="version", version=f"spectro-calendar {__version__}", help="Show the version and exit")
     parser.add_argument("--config", type=Path, default=None, help="Path to a YAML file providing default values for any of these options (see example_config.yaml). Options passed on the command line always take precedence over the config file.")
 
     # Spectrogram parameters (from original bash script)
@@ -1164,7 +1204,7 @@ def main():
     pre_args, _ = parser.parse_known_args()
     if pre_args.config:
         config_path = pre_args.config.resolve()
-        valid_keys = {action.dest for action in parser._actions if action.dest not in ("help", "config")}
+        valid_keys = {action.dest for action in parser._actions if action.dest not in ("help", "version", "config")}
         try:
             config = load_yaml_config(config_path, valid_keys)
         except (OSError, ValueError, yaml.YAMLError) as e:
@@ -1225,7 +1265,10 @@ def main():
         fatal("--dates cannot be combined with --start-date/--end-date: use either an explicit list or a range")
 
     if args.dates:
-        validate_dates(args.dates, available_dates)
+        try:
+            validate_dates(args.dates, available_dates)
+        except ValueError as e:
+            fatal(f"{e}. Available dates: {', '.join(available_dates)}")
         dates_to_process = args.dates
     elif args.start_date or args.end_date:
         try:
@@ -1293,7 +1336,7 @@ def main():
 
     # Create and write the CSS file
     css_path = out_dir / "spectrogram-table.css"
-    css_path.write_text(SPECTROGRAM_TABLE_CSS)
+    css_path.write_text(SPECTROGRAM_TABLE_CSS, encoding="utf-8")
     print("spectrogram-table.css written")
 
     if failed:
