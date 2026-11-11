@@ -1,0 +1,115 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+  # release.yml runs this first, and publishes the wheel built here.
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    name: tests / ${{ matrix.os }} / py${{ matrix.python }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        python: ["3.12"]
+        include:
+          # The oldest Python pyproject.toml accepts.
+          - os: ubuntu-latest
+            python: "3.10"
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          python-version: ${{ matrix.python }}
+      # The ffmpeg backend is optional; its test runs where ffmpeg is present
+      # and is skipped elsewhere.
+      - name: Install ffmpeg
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
+      - name: Install
+        run: uv sync --locked
+      - name: Lint
+        run: uv run ruff check .
+      - name: Test
+        run: uv run pytest
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
+      - name: Check the version agrees everywhere
+        run: |
+          version=$(uv version --short)
+          code=$(sed -n 's/^__version__ = "\(.*\)"$/\1/p' src/spectro_calendar/__init__.py)
+          if [ "$version" != "$code" ]; then
+            echo "::error::pyproject.toml says $version, src/spectro_calendar/__init__.py says $code"
+            exit 1
+          fi
+          if [ "$GITHUB_REF_TYPE" = tag ] && [ "$GITHUB_REF_NAME" != "v$version" ]; then
+            echo "::error::tag $GITHUB_REF_NAME does not match version $version"
+            exit 1
+          fi
+      - run: uv build
+      - uses: actions/upload-artifact@v7
+        with:
+          name: dist
+          path: dist/
+
+  # What a new user does: run the installer on a machine with no Python set
+  # up, then make a calendar. The wheel stands in for the PyPI release.
+  installer:
+    name: installer / ${{ matrix.os }}
+    needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          name: dist
+          path: dist
+
+      - name: Run install.sh
+        if: runner.os != 'Windows'
+        run: |
+          SPECTRO_CALENDAR_PACKAGE="spectro-calendar @ $(ls "$PWD"/dist/*.whl)" sh scripts/install.sh
+      - name: Run install.ps1
+        if: runner.os == 'Windows'
+        # Windows PowerShell 5.1, the one every Windows machine has.
+        shell: powershell
+        run: |
+          $env:SPECTRO_CALENDAR_PACKAGE = "spectro-calendar @ $((Get-ChildItem dist\*.whl).FullName)"
+          powershell -NoProfile -ExecutionPolicy ByPass -File scripts\install.ps1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: The installed command makes a calendar
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          spectro-calendar --version
+          uv run --no-project --with numpy --with scipy python -c "
+          import numpy as np, scipy.io.wavfile as w
+          from pathlib import Path
+          Path('rec').mkdir()
+          x = (np.random.default_rng(0).standard_normal(4000) * 3000).astype(np.int16)
+          for name in ('20260301_050000', '20260302_050000'):
+              w.write(f'rec/{name}.WAV', 8000, x)
+          "
+          spectro-calendar rec --output-dir out --include-audio --max-cores 2
+          test -f out/index_.html
+          test "$(ls out/*-thumbnail-.png | wc -l)" -eq 2

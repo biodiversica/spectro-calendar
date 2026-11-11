@@ -14,5 +14,5 @@ venv/
 .idea/
 .DS_Store
 
-# local scripts
-scripts/
+# local helper, not part of the project
+scripts/serve_calendars.py
