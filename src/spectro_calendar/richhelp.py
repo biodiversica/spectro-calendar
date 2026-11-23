@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
-from typing import Any, NoReturn
+from typing import IO, Any, NoReturn
 
 from rich import box
 from rich.align import Align
@@ -100,8 +100,9 @@ negative_highlighter = NegativeOptionHighlighter()
 types_highlighter = TypesHighlighter()
 
 
-def _console(stderr: bool = False) -> Console:
+def _console(stderr: bool = False, file: IO[str] | None = None) -> Console:
     return Console(
+        file=file,
         theme=Theme(
             {
                 "option": STYLE_OPTION,
@@ -313,6 +314,13 @@ class RichHelpParser(argparse.ArgumentParser):
         with console.capture() as capture:
             self._render_help(console)
         return capture.get()
+
+    def print_help(self, file: IO[str] | None = None) -> None:
+        # Not argparse's default of writing format_help() to the file: a
+        # captured string is raw ANSI, which the classic Windows console
+        # (cmd/PowerShell in conhost) prints as "←[1m" junk. Printing through
+        # Rich lets it drive that console with Win32 calls instead.
+        self._render_help(_console(file=file))
 
     def _render_help(self, console: Console) -> None:
         positionals = [a for a in self._actions if not a.option_strings]

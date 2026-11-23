@@ -61,6 +61,26 @@ def test_version(monkeypatch, capsys):
     assert capsys.readouterr().out.strip() == f"spectro-calendar {__version__}"
 
 
+def test_help(monkeypatch, capsys):
+    # -h must be printed by Rich itself, not pre-rendered to an ANSI string and
+    # written out: the classic Windows console would show that string's escape
+    # codes as "←[1m" text instead of colours.
+    rendered_strings = []
+    original = cli.RichHelpParser.format_help
+    monkeypatch.setattr(
+        cli.RichHelpParser,
+        "format_help",
+        lambda self: rendered_strings.append(1) or original(self),
+    )
+    monkeypatch.setattr(sys, "argv", ["spectro-calendar", "-h"])
+    with pytest.raises(SystemExit) as exit_info:
+        cli.main()
+    assert exit_info.value.code == 0
+    out = capsys.readouterr().out
+    assert "Usage:" in out and "--output-dir" in out
+    assert not rendered_strings
+
+
 def test_basic_calendar(monkeypatch, recordings):
     run_cli(monkeypatch, recordings)
 
