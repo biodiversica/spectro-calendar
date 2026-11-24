@@ -5,6 +5,8 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+  schedule:
+    - cron: "0 6 * * 1"  # Mondays
   # release.yml runs this first, and publishes the wheel built here.
   workflow_call:
 
@@ -45,6 +47,22 @@ jobs:
         run: uv sync --locked
       - name: Lint
         run: uv run ruff check .
+      - name: Test
+        run: uv run pytest
+
+  # The installer ignores uv.lock and takes the newest releases, so test those
+  # too. The weekly run catches a dependency release between commits.
+  tests-latest:
+    name: tests / newest dependencies
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
+        with:
+          python-version: "3.12"
+      - name: Install
+        run: uv sync --upgrade
       - name: Test
         run: uv run pytest
 
@@ -96,14 +114,17 @@ jobs:
       - name: Run install.sh
         if: runner.os != 'Windows'
         run: |
-          SPECTRO_CALENDAR_PACKAGE="spectro-calendar @ $(ls "$PWD"/dist/*.whl)" sh scripts/install.sh
-      - name: Run install.ps1
+          SPECTRO_CALENDAR_YES=1 SPECTRO_CALENDAR_PACKAGE="spectro-calendar @ $(ls "$PWD"/dist/*.whl)" sh scripts/install.sh
+      # The README's command, as typed, in Windows PowerShell 5.1 (the one
+      # every Windows machine has), on this checkout's script served as a
+      # release serves it. See .github/scripts/readme-command.ps1.
+      - name: Run install.ps1 with the README command
         if: runner.os == 'Windows'
-        # Windows PowerShell 5.1, the one every Windows machine has.
         shell: powershell
         run: |
+          $env:SPECTRO_CALENDAR_YES = "1"
           $env:SPECTRO_CALENDAR_PACKAGE = "spectro-calendar @ $((Get-ChildItem dist\*.whl).FullName)"
-          powershell -NoProfile -ExecutionPolicy ByPass -File scripts\install.ps1
+          powershell -NoProfile -ExecutionPolicy ByPass -File .github\scripts\readme-command.ps1
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: The installed command makes a calendar
@@ -121,3 +142,21 @@ jobs:
           spectro-calendar rec --output-dir out --include-audio --max-cores 2
           test -f out/index_.html
           test "$(ls out/*-thumbnail-.png | wc -l)" -eq 2
+
+      # Uninstalling takes the command and leaves the calendar it made.
+      - name: Uninstall with install.sh
+        if: runner.os != 'Windows'
+        run: |
+          SPECTRO_CALENDAR_YES=1 SPECTRO_CALENDAR_UNINSTALL=1 sh scripts/install.sh
+          test ! -e "$HOME/.local/bin/spectro-calendar"
+          test -f out/index_.html
+      - name: Uninstall with the README command
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          $env:SPECTRO_CALENDAR_YES = "1"
+          powershell -NoProfile -ExecutionPolicy ByPass -File .github\scripts\readme-command.ps1 -Uninstall
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $Exe = Join-Path $HOME ".local\bin\spectro-calendar.exe"
+          if (Test-Path $Exe) { throw "still there after uninstalling: $Exe" }
+          if (-not (Test-Path out\index_.html)) { throw "the calendar went too" }

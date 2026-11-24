@@ -26,7 +26,7 @@ The tool is an extended adaptation of the
 On Windows, open PowerShell and run:
 
 ```powershell
-powershell -ExecutionPolicy ByPass -c "irm https://github.com/biodiversica/spectro-calendar/releases/latest/download/install.ps1 | iex"
+powershell -ExecutionPolicy ByPass -c "irm https://github.com/biodiversica/spectro-calendar/releases/latest/download/install.ps1 | Out-String | iex"
 ```
 
 On macOS and Linux, open a terminal and run:
@@ -35,7 +35,8 @@ On macOS and Linux, open a terminal and run:
 curl -LsSf https://github.com/biodiversica/spectro-calendar/releases/latest/download/install.sh | sh
 ```
 
-The installer performs the following steps:
+The installer first lists what it is going to do and asks for confirmation
+before changing anything. It then performs the following steps:
 
 1. Installs [uv](https://docs.astral.sh/uv/) into `~/.local/bin` if it is not
    already present. uv downloads its own Python, so no prior installation is
@@ -45,8 +46,27 @@ The installer performs the following steps:
 
 The command becomes available in terminals opened after the installation. The
 environment variable `SPECTRO_CALENDAR_PACKAGE` changes what the installer
-installs (for example, a specific version such as `spectro-calendar==0.1.0`).
-To uninstall, run `uv tool uninstall spectro-calendar`.
+installs (for example, a specific version such as `spectro-calendar==0.1.0`),
+and `SPECTRO_CALENDAR_YES=1` skips the confirmation, for installing or
+uninstalling from a script.
+
+**Uninstalling.** Run the installer again with `SPECTRO_CALENDAR_UNINSTALL=1`.
+It lists what it is going to remove and asks for confirmation first. On
+Windows, run in PowerShell:
+
+```powershell
+powershell -ExecutionPolicy ByPass -c '$env:SPECTRO_CALENDAR_UNINSTALL=1; irm https://github.com/biodiversica/spectro-calendar/releases/latest/download/install.ps1 | Out-String | iex'
+```
+
+On macOS and Linux:
+
+```sh
+curl -LsSf https://github.com/biodiversica/spectro-calendar/releases/latest/download/install.sh | SPECTRO_CALENDAR_UNINSTALL=1 sh
+```
+
+This removes spectro-calendar. The calendars and spectrograms it made are
+never removed, and neither is uv, which other programs may use. Running
+`uv tool uninstall spectro-calendar` directly has the same effect.
 
 **With uv or pip.** spectro-calendar is published on PyPI and requires
 Python 3.10 or later:
