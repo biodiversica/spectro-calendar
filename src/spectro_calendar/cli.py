@@ -903,11 +903,15 @@ def spectrogram_scipy(
         save_fullsize (bool): Also keep the full-size PNG on disk; otherwise
             it is only rendered in memory to be downscaled into the thumbnail
     """
-    import matplotlib.pyplot as plt
     import numpy as np
     import scipy.io.wavfile as wav
     import scipy.signal as signal
     from PIL import Image
+    # A bare Figure, not pyplot: pyplot would pick an interactive backend
+    # (TkAgg on Windows) and set up Tcl/Tk for every image, which can fail
+    # ("Can't find a usable init.tcl") and costs time. A Figure renders
+    # straight to PNG with no backend or window.
+    from matplotlib.figure import Figure
 
     # Read the audio file using scipy
     sample_rate, audio_data = wav.read(wav_path)
@@ -928,24 +932,24 @@ def spectrogram_scipy(
 
     # Convert image size to float (in inches for matplotlib)
     fig_w, fig_h = [int(x) / 100 for x in img_size.split("x")]
-    plt.figure(figsize=(fig_w, fig_h))
+    fig = Figure(figsize=(fig_w, fig_h))
+    ax = fig.add_subplot()
 
     # Display the spectrogram. Silent bins (e.g. digital silence, or nothing
     # above the recorder's filter) are log10(0) = -inf, which matplotlib
     # already handles; only numpy's warning about it is silenced.
     with np.errstate(divide="ignore"):
         level_db = 10 * np.log10(spectrogram)
-    plt.pcolormesh(t, f[freq_mask], level_db, shading='auto', cmap='plasma')
-    plt.ylabel('Frequency [Hz]')
-    plt.xlabel('Time [s]')
-    plt.axis("off")
+    ax.pcolormesh(t, f[freq_mask], level_db, shading='auto', cmap='plasma')
+    ax.set_ylabel('Frequency [Hz]')
+    ax.set_xlabel('Time [s]')
+    ax.axis("off")
 
     # Render the full-size spectrogram image, to disk only if requested
     base = wav_path.stem
     full_img = out_dir / f"{base}-fullsize-{spec_label}.png" if save_fullsize else io.BytesIO()
     thumb_img = out_dir / f"{base}-thumbnail-{spec_label}.png"
-    plt.savefig(full_img, format="png", bbox_inches="tight", pad_inches=0)
-    plt.close()
+    fig.savefig(full_img, format="png", bbox_inches="tight", pad_inches=0)
 
     # Generate thumbnail by resizing the full-size spectrogram image
     tw, th = [int(x) for x in thumbnail_scale.split(":")]

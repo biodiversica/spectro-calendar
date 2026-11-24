@@ -285,6 +285,26 @@ def test_help_does_not_load_the_scientific_stack():
     assert "LOADED []" in result.stdout, result.stdout[-500:]
 
 
+def test_spectrograms_do_not_use_pyplot_or_tk(recordings):
+    # pyplot picks an interactive backend (TkAgg on Windows) and sets up
+    # Tcl/Tk for every image, which can fail on its own and leave recordings
+    # out of the calendar. A fresh interpreter, since tests may load pyplot.
+    code = (
+        "import sys\n"
+        f"sys.argv = ['spectro-calendar', {str(recordings)!r}, '--max-cores', '1']\n"
+        "from spectro_calendar import cli\n"
+        "cli.main()\n"
+        "print('LOADED', [m for m in ('matplotlib.pyplot', 'tkinter') if m in sys.modules])\n"
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", code],
+        capture_output=True, text=True, encoding="utf-8", errors="replace",
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "LOADED []" in result.stdout, result.stdout[-500:]
+    assert len(list(recordings.glob("*-thumbnail-.png"))) == 3
+
+
 @pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="ffmpeg is not installed")
 def test_ffmpeg_backend(monkeypatch, recordings):
     run_cli(monkeypatch, recordings, "--use-ffmpeg", "--save-fullsize")
