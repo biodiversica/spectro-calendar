@@ -83,16 +83,11 @@ pip install spectro-calendar       # ou com pip, no ambiente atual
 executada uma única vez, sem instalação permanente, com
 `uvx spectro-calendar /caminho/para/gravacoes`.
 
-**Programas de sistema opcionais.** Dois programas externos ampliam a
-ferramenta. Nenhum deles é instalado pelos métodos acima:
-
-- O [ffmpeg](https://ffmpeg.org/) habilita o backend de espectrogramas mais
-  rápido (`--use-ffmpeg`; veja [Backends](#backends)). Ele está disponível nos
-  gerenciadores de pacotes usuais, por exemplo `brew install ffmpeg`,
-  `sudo apt install ffmpeg` ou `winget install --id Gyan.FFmpeg`.
-- O [sshfs](https://github.com/libfuse/sshfs) permite processar gravações
-  armazenadas em uma máquina remota (veja
-  [Gravações Remotas via SSH](#gravações-remotas-via-ssh)).
+**Programa de sistema opcional.** O [ffmpeg](https://ffmpeg.org/), que não é
+instalado pelos métodos acima, habilita o backend de espectrogramas mais
+rápido (`--use-ffmpeg`; veja [Backends](#backends)). Ele está disponível nos
+gerenciadores de pacotes usuais, por exemplo `brew install ffmpeg`,
+`sudo apt install ffmpeg` ou `winget install --id Gyan.FFmpeg`.
 
 **A partir do código-fonte.** Para modificar o código, clone o repositório e
 instale-o com o uv, que cria `.venv` a partir de `pyproject.toml` e `uv.lock`:
@@ -211,6 +206,14 @@ spectro-calendar --config example_config.yaml --max-cores 2
 
 Uma chave não reconhecida no arquivo de configuração é informada como erro,
 com a lista das chaves válidas.
+
+Cada calendário registra as configurações com que foi gerado. Passe o mouse
+sobre o **?** à direita do cabeçalho da página (ou chegue a ele com Tab, ou
+toque nele em uma tela sensível ao toque) para vê-las: uma tabela com um
+parâmetro por linha, nomeado como no arquivo de configuração, com o valor
+usado, tenha ele vindo da linha de comando, do arquivo de configuração ou do
+padrão. Acima da tabela aparecem a versão do spectro-calendar, o horário da
+execução e o arquivo de configuração usado, se houver.
 
 ### Opções
 
@@ -344,7 +347,8 @@ duas linhas, em cada data entre as duas colunas. Por exemplo, clicar em
 07:00 nos dias 1, 2 e 3 de março. Todas as caixas assumem o novo estado da
 caixa clicada com Shift, de modo que a mesma ação sobre caixas marcadas limpa
 o intervalo. Cada clique com Shift também se torna o canto inicial do próximo
-intervalo.
+intervalo. Um lembrete disso aparece ao passar o mouse sobre **Annotation**, à
+esquerda da barra.
 
 As células selecionadas são destacadas, a barra exibe o número de gravações
 selecionadas, e **Clear selection** limpa toda a seleção após uma confirmação.
@@ -362,75 +366,6 @@ gravações, para que os players de áudio alcancem as gravações (por exemplo,
 `python -m http.server` executado no diretório pai comum aos dois). Todas as
 demais funções, incluindo a exportação, funcionam a partir de `file://` nos
 dois navegadores.
-
-### Gravações Remotas via SSH
-
-Gravações armazenadas em uma máquina remota podem ser processadas montando o
-diretório remoto localmente com o [sshfs](https://github.com/libfuse/sshfs) e
-informando o ponto de montagem como diretório de gravações. Como a ferramenta
-apenas lê o diretório de gravações, uma montagem somente leitura é suficiente:
-
-```bash
-mkdir -p ~/mnt/sitio-1
-sshfs usuario@host:/caminho/no/servidor ~/mnt/sitio-1 \
-  -o ro,reconnect,cache=yes,kernel_cache \
-  -o IdentityFile=$HOME/.ssh/sua_chave,IdentitiesOnly=yes
-
-spectro-calendar ~/mnt/sitio-1 \
-  --output-dir ~/calendarios/sitio-1 \
-  --use-ffmpeg --include-audio
-```
-
-**Determinação do caminho remoto.** O sshfs usa o subsistema SFTP do servidor
-SSH, cuja visão do sistema de arquivos frequentemente difere da de um shell de
-login. Dispositivos NAS, em particular, costumam apresentar as pastas
-compartilhadas na raiz do SFTP. Um caminho que funciona com `scp` pode,
-portanto, falhar com o sshfs, especialmente em clientes OpenSSH anteriores à
-versão 9.0, nos quais o `scp` usa o shell remoto em vez do SFTP. O caminho
-correto pode ser obtido diretamente pelo SFTP:
-
-```bash
-sftp usuario@host
-sftp> pwd     # o diretório atual, segundo o SFTP
-sftp> ls /    # o conteúdo da raiz do SFTP
-```
-
-Em um dispositivo Synology, por exemplo, o shell pode informar
-`/volume1/homes/usuario`, enquanto o SFTP apresenta a pasta compartilhada como
-`/Gravacoes/sitio-1`; o sshfs requer este último. O argumento
-`usuario@host:caminho` inteiro deve estar entre aspas quando o caminho remoto
-contiver espaços ou caracteres acentuados. A página gerada referencia as
-gravações pelo ponto de montagem local, de modo que os nomes remotos não
-aparecem nela.
-
-A geração dos espectrogramas transfere cada gravação selecionada pela conexão
-uma vez. Essa é a parte mais lenta do processo e não pode ser evitada, pois
-cada arquivo precisa ser lido por completo para o cálculo do seu
-espectrograma. Os filtros de data e horário (`--dates` ou
-`--start-date`/`--end-date`, `--start-time`/`--end-time`, `--time-step`) são
-o meio de reduzir a transferência. Todos os arquivos gerados são gravados
-localmente, em `--output-dir`.
-
-**A reprodução não exige baixar as gravações.** Com `--include-audio`, cada
-player de áudio lê a sua gravação através da montagem, e `preload="none"`
-garante que somente as gravações efetivamente reproduzidas sejam transferidas,
-e apenas até o ponto em que são ouvidas. Abrir o calendário em si não
-transfere nada. Como WAV é um formato sem compressão (um minuto de áudio do
-AudioMoth a 48 kHz ocupa aproximadamente 23 MB), a reprodução é confortável em
-uma rede local ou VPN, mas pode travar em uma conexão lenta.
-
-Dois pontos adicionais se aplicam:
-
-- O calendário deve ser aberto diretamente do disco (`file://`). O caminho
-  relativo do diretório de saída até o ponto de montagem sai do diretório de
-  saída (por exemplo, `../../mnt/sitio-1/20260304_100000.WAV`), de modo que um
-  servidor web iniciado no diretório de saída, como `python -m http.server`,
-  não consegue servir o áudio, embora as miniaturas carreguem normalmente.
-- Se a conexão for interrompida, `-o reconnect` restabelece a montagem, mas as
-  leituras em andamento falham primeiro. Executar o comando novamente gera os
-  espectrogramas que faltaram; com o backend ffmpeg, como no exemplo acima, os
-  espectrogramas existentes são mantidos e não são transferidos novamente. A
-  montagem é removida com `fusermount -u ~/mnt/sitio-1`.
 
 ## Funcionamento
 
@@ -532,6 +467,11 @@ execução consiste nas seguintes etapas:
    espaços, acentos ou símbolos como `#` funcionam corretamente; quando não
    existe caminho relativo (unidades diferentes no Windows), um endereço
    absoluto `file://` é usado.
+
+   As configurações da execução, listadas por `settings_summary`, são
+   colocadas em uma tabela, em um painel ligado ao **?** do cabeçalho da
+   página. Ele é exibido ao passar o mouse ou ao receber o foco, apenas com
+   CSS, sem script.
 
    Com `--speed-control`, a página inclui o seletor de velocidade e o script
    `SPEED_SCRIPT`. Com `--annotate`, cada célula inclui também uma caixa de

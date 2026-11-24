@@ -79,16 +79,11 @@ pip install spectro-calendar       # or with pip, into the current environment
 `uv tool upgrade spectro-calendar` upgrades the tool. It can also be run once,
 without a permanent installation, with `uvx spectro-calendar /path/to/recordings`.
 
-**Optional system programs.** Two external programs extend the tool. Neither
-is installed by the methods above:
-
-- [ffmpeg](https://ffmpeg.org/) enables the faster spectrogram backend
-  (`--use-ffmpeg`; see [Backends](#backends)). It is available through the
-  usual package managers, for example `brew install ffmpeg`,
-  `sudo apt install ffmpeg` or `winget install --id Gyan.FFmpeg`.
-- [sshfs](https://github.com/libfuse/sshfs) allows recordings stored on a
-  remote machine to be processed (see
-  [Remote Recordings over SSH](#remote-recordings-over-ssh)).
+**Optional system program.** [ffmpeg](https://ffmpeg.org/), which is not
+installed by the methods above, enables the faster spectrogram backend
+(`--use-ffmpeg`; see [Backends](#backends)). It is available through the
+usual package managers, for example `brew install ffmpeg`,
+`sudo apt install ffmpeg` or `winget install --id Gyan.FFmpeg`.
 
 **From source.** To modify the code, clone the repository and install it with
 uv, which creates `.venv` from `pyproject.toml` and `uv.lock`:
@@ -356,72 +351,6 @@ that contains both the output directory and the recordings, so that the audio
 players can reach the recordings (for example, `python -m http.server` run in
 their common parent directory). All other functions, including the export,
 work from `file://` in both browsers.
-
-### Remote Recordings over SSH
-
-Recordings stored on a remote machine can be processed by mounting the remote
-directory locally with [sshfs](https://github.com/libfuse/sshfs) and passing
-the mount point as the recording directory. Since the tool only reads from
-the recording directory, a read-only mount is sufficient:
-
-```bash
-mkdir -p ~/mnt/site-1
-sshfs user@host:/path/on/server ~/mnt/site-1 \
-  -o ro,reconnect,cache=yes,kernel_cache \
-  -o IdentityFile=$HOME/.ssh/your_key,IdentitiesOnly=yes
-
-spectro-calendar ~/mnt/site-1 \
-  --output-dir ~/calendars/site-1 \
-  --use-ffmpeg --include-audio
-```
-
-**Determining the remote path.** sshfs uses the SFTP subsystem of the SSH
-server, whose view of the file system frequently differs from that of a login
-shell. NAS devices in particular often present shared folders at the SFTP
-root. A path that works with `scp` may therefore fail with sshfs, especially
-with OpenSSH clients older than 9.0, in which `scp` uses the remote shell
-instead of SFTP. The correct path can be obtained from SFTP directly:
-
-```bash
-sftp user@host
-sftp> pwd     # the current directory, as seen by SFTP
-sftp> ls /    # the contents of the SFTP root
-```
-
-On a Synology device, for example, the shell may report
-`/volume1/homes/user`, while SFTP presents the shared folder as
-`/Recordings/site-1`; sshfs requires the latter. The whole `user@host:path`
-argument should be quoted when the remote path contains spaces or accented
-characters. The generated page refers to the recordings through the local
-mount point, so remote names do not appear in it.
-
-Generating the spectrograms transfers each selected recording over the
-connection once. This is the slowest part of the process and cannot be
-avoided, since each file must be read completely to compute its spectrogram.
-The date and time filters (`--dates` or `--start-date`/`--end-date`,
-`--start-time`/`--end-time`, `--time-step`) are the means of reducing the
-transfer. All generated files are written locally, to `--output-dir`.
-
-**Playback does not require downloading the recordings.** With
-`--include-audio`, each audio player reads its recording through the mount,
-and `preload="none"` ensures that only the recordings actually played are
-transferred, and only as far as they are played. Opening the calendar itself
-transfers nothing. Since WAV is an uncompressed format (one minute of
-AudioMoth audio at 48 kHz is approximately 23 MB), playback is comfortable
-over a local network or VPN but may stall over a slow connection.
-
-Two further points apply:
-
-- The calendar should be opened directly from disk (`file://`). The relative
-  path from the output directory to the mount point leads outside the output
-  directory (for example, `../../mnt/site-1/20260304_100000.WAV`), so a web
-  server started in the output directory, such as `python -m http.server`,
-  cannot serve the audio, although the thumbnails still load.
-- If the connection is interrupted, `-o reconnect` restores the mount, but
-  reads in progress fail first. Running the command again generates the
-  missing spectrograms; with the ffmpeg backend, as in the example above,
-  existing spectrograms are kept and not transferred again. The mount is removed
-  with `fusermount -u ~/mnt/site-1`.
 
 ## How It Works
 
