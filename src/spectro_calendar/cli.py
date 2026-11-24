@@ -338,9 +338,39 @@ tfoot th:first-child {
 .speed-bar + .annotate-bar {
   border-top: 1px solid #555;
 }
-.speed-hint,
-.annotate-hint {
+.speed-hint {
   opacity: 0.7;
+}
+/* The Shift+click hint is shown only while hovering (or focusing) the
+   "Annotation" title. The bar is positioned above the table (z-index 1), so
+   the hint drops over the calendar; below the header (10), whose settings
+   panel may cover it. */
+.annotate-bar {
+  position: relative;
+  z-index: 9;
+}
+.annotate-title {
+  position: relative;
+  cursor: help;
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+}
+.annotate-hint {
+  display: none;
+  position: absolute;
+  top: 100%;
+  left: 0;
+  margin-top: 6px;
+  padding: 4px 8px;
+  border: 1px solid #000;
+  background: #fff;
+  color: #111;
+  white-space: nowrap;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+.annotate-title:hover .annotate-hint,
+.annotate-title:focus .annotate-hint {
+  display: block;
 }
 .annotate-count {
   margin-left: auto;
@@ -1192,7 +1222,11 @@ def generate_html(wav_files, file_dates, spec_label, rec_dir, out_dir, cell_widt
             # a data attribute, keeping ANNOTATION_SCRIPT a static constant.
             export_name = f"annotations_{spec_label}" if spec_label else "annotations"
             f.write(f'<div class="annotate-bar" data-export-name="{html.escape(export_name, quote=True)}">\n')
-            f.write('<span class="annotate-title">Annotation</span>\n')
+            f.write(
+                '<span class="annotate-title" tabindex="0" aria-describedby="annotate-hint">Annotation'
+                '<span class="annotate-hint" id="annotate-hint" role="tooltip">'
+                'Shift+click a second box to select the range between them</span></span>\n'
+            )
             f.write('<button type="button" id="annotate-export" disabled>Export selection (.txt)</button>\n')
             f.write('<label for="annotate-format">as</label>\n')
             f.write('<select id="annotate-format">\n')
@@ -1201,7 +1235,6 @@ def generate_html(wav_files, file_dates, spec_label, rec_dir, out_dir, cell_widt
             f.write('<option value="both">filename + date &amp; time</option>\n')
             f.write('</select>\n')
             f.write('<button type="button" id="annotate-clear" disabled>Clear selection</button>\n')
-            f.write('<span class="annotate-hint">Shift+click a second box to select the range between them</span>\n')
             f.write('<span class="annotate-count" id="annotate-count">0 recordings selected</span>\n')
             f.write('</div>\n')
 

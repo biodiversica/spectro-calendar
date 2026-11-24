@@ -117,6 +117,8 @@ def test_optional_page_features(monkeypatch, recordings, tmp_path):
     assert page.count('<audio controls preload="none">') == 3
     assert 'id="speed-select"' in page and "preservesPitch" in page
     assert 'class="annotate-bar"' in page and page.count('class="annotate-check"') == 3
+    # The Shift+click hint sits inside the "Annotation" title, shown on hover
+    assert re.search(r'<span class="annotate-title"[^>]*>Annotation<span class="annotate-hint"', page)
     assert len(list(out.glob("*-fullsize-lf.png"))) == 3
     # Nothing is written next to the recordings when --output-dir is set
     assert sorted(p.suffix for p in recordings.iterdir()) == [".WAV"] * 3

@@ -338,7 +338,8 @@ date between the two columns. For example, clicking 01 Mar 05:00 and then
 Shift+clicking 03 Mar 07:00 selects 05:00 to 07:00 on 1, 2 and 3 March. All
 boxes take the new state of the Shift+clicked box, so the same action over
 selected boxes clears the range. Each Shift+click also becomes the starting
-corner of the next range.
+corner of the next range. A reminder of this appears when hovering over
+**Annotation** at the left of the toolbar.
 
 Selected cells are highlighted, the toolbar shows the number of selected
 recordings, and **Clear selection** clears the whole selection after a
