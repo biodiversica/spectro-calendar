@@ -17,7 +17,6 @@ from pathlib import Path
 import numpy as np
 import pytest
 import scipy.io.wavfile as wavfile
-import yaml
 
 from spectro_calendar import __version__, cli
 
@@ -211,27 +210,31 @@ def test_config_file_with_cli_override(monkeypatch, recordings, tmp_path):
     assert "<audio" in read_html(out_cli, "cfg")
 
 
-def test_settings_panel_lists_the_run_as_a_config(monkeypatch, recordings, tmp_path):
+def test_settings_panel_lists_every_option(monkeypatch, recordings, tmp_path):
     config = tmp_path / "config.yaml"
     config.write_text("gain: 3\ndates: ['20260301']\n", encoding="utf-8")
     run_cli(monkeypatch, recordings, "--config", config, "--include-audio")
     page = read_html(recordings)
     assert 'class="settings-toggle"' in page
-    text = html.unescape(re.search(r"<pre>(.*?)</pre>", page, re.S).group(1))
-    assert f"# spectro-calendar {__version__}," in text
-    assert f"# config file: {config.resolve()}" in text
-    settings = yaml.safe_load(text)
-    # Values from the config file, the command line and the defaults alike
-    assert settings["gain"] == 3
-    assert settings["dates"] == ["20260301"]
-    assert settings["include_audio"] is True
-    assert settings["max_cores"] == 1
-    assert settings["start_time"] == "000000"
-    assert settings["recording_dir"] == str(recordings.resolve())
-    # It is a config file that the tool accepts as it is
-    replay = tmp_path / "replay.yaml"
-    replay.write_text(text, encoding="utf-8")
-    run_cli(monkeypatch, "--config", replay)
+    panel = re.search(r'<div class="settings-panel".*?</table>', page, re.S).group(0)
+    assert f"spectro-calendar {__version__}, run on" in panel
+    assert html.escape(f"Config file: {config.resolve()}") in panel
+    rows = dict(
+        (html.unescape(key), html.unescape(value))
+        for key, value in re.findall(
+            r'<tr><td class="settings-key">(.*?)</td><td class="settings-value[^"]*">(.*?)</td></tr>', panel
+        )
+    )
+    # One row per option, from the config file, the command line and the
+    # defaults alike; the paths resolved, and unset options marked as such
+    assert rows["gain"] == "3"
+    assert rows["dates"] == "20260301"
+    assert rows["include_audio"] == "true"
+    assert rows["max_cores"] == "1"
+    assert rows["start_time"] == "000000"
+    assert rows["time_step"] == "not set"
+    assert rows["recording_dir"] == str(recordings.resolve())
+    assert rows["output_dir"] == str(recordings.resolve())
 
 
 def test_date_without_recordings_is_an_error(monkeypatch, recordings, capsys):

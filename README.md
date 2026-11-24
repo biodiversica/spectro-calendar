@@ -207,10 +207,10 @@ the list of valid keys.
 
 Every calendar records the settings it was made with. Hover over the **?** at
 the right of the page header (or tab to it, or tap it on a touch screen) to
-see them, in the format of a configuration file, preceded by the
-spectro-calendar version, the time of the run and the configuration file used,
-if any. The list can be copied into a file and passed to `--config` to make
-the same calendar again.
+see them: a table with one parameter per row, named as in a configuration
+file, with the value used, whether it came from the command line, the
+configuration file or the default. Above the table are the spectro-calendar
+version, the time of the run and the configuration file used, if any.
 
 ### Options
 
@@ -518,8 +518,8 @@ The complete processing pipeline is implemented in
    resolve correctly; when no relative path exists (different drives on
    Windows), an absolute `file://` address is used.
 
-   The settings of the run, formatted by `settings_summary` as YAML, are
-   placed in a panel attached to the **?** in the page header. It is shown on
+   The settings of the run, listed by `settings_summary`, are placed as a
+   table in a panel attached to the **?** in the page header. It is shown on
    hover or focus with CSS alone, without a script.
 
    With `--speed-control`, the page includes the speed selector and the

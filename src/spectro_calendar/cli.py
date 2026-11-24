@@ -181,10 +181,39 @@ body {
   font-weight: bold;
   margin-bottom: 4px;
 }
-.settings-panel pre {
-  margin: 0;
-  white-space: pre-wrap;
+.settings-meta {
+  margin-bottom: 6px;
+  color: #555;
+}
+/* One parameter per row. Plain <td> cells, not <th>: the calendar's
+   th:first-child rule would make the first column sticky and grey. */
+.settings-table {
+  border-collapse: collapse;
+}
+.settings-table td {
+  padding: 2px 10px;
+  border: 1px solid #ccc;
+  text-align: left;
+  vertical-align: top;
+}
+.settings-table thead td {
+  background: #333;
+  color: #fff;
+  font-weight: bold;
+}
+.settings-table tbody tr:nth-child(even) td {
+  background: #f3f3f3;
+}
+.settings-table td.settings-key {
+  font-weight: bold;
+  white-space: nowrap;
+}
+.settings-table td.settings-value {
   overflow-wrap: anywhere;
+}
+.settings-unset {
+  color: #888;
+  font-style: italic;
 }
 .page-footer {
   text-align: center;
@@ -1023,9 +1052,8 @@ def html_link(target, out_dir):
 
 def settings_summary(parser, args, rec_dir, out_dir, config_path=None):
     """
-    Describes the settings a calendar was made with, as the YAML a --config
-    file takes, so it can be read at a glance or copied into a config file to
-    make the same calendar again.
+    Lists the settings a calendar was made with, for the panel under the "?"
+    in the page header.
 
     Args:
         parser (argparse.ArgumentParser): The parser args came from; its
@@ -1037,28 +1065,32 @@ def settings_summary(parser, args, rec_dir, out_dir, config_path=None):
         config_path (Path | None): The --config file used, if any
 
     Returns:
-        str: The settings as YAML, under comment lines naming the
-            spectro-calendar version, when it ran and the config file
+        tuple: (notes, rows). notes are lines about the run (version, time,
+            config file); rows are (option, value) pairs, one per option,
+            named as in a --config file, with value None for an option that
+            was not set
     """
-    import yaml
+    notes = [f"spectro-calendar {__version__}, run on {datetime.now():%d-%m-%Y %H:%M}"]
+    if config_path is not None:
+        notes.append(f"Config file: {config_path}")
 
-    settings = {}
+    resolved = {"recording_dir": rec_dir, "output_dir": out_dir}
+    rows = []
     for action in parser._actions:
         if action.dest in ("help", "version", "config"):
             continue
-        value = getattr(args, action.dest)
-        settings[action.dest] = str(value) if isinstance(value, Path) else value
-    settings["recording_dir"] = str(rec_dir)
-    settings["output_dir"] = str(out_dir)
+        value = resolved.get(action.dest, getattr(args, action.dest))
+        if isinstance(value, bool):
+            value = "true" if value else "false"
+        elif isinstance(value, (list, tuple)):
+            value = ", ".join(map(str, value))
+        elif value is not None:
+            value = str(value)
+        rows.append((action.dest, value if value != "" else None))
+    return notes, rows
 
-    lines = [f"# spectro-calendar {__version__}, {datetime.now():%d-%m-%Y %H:%M}"]
-    if config_path is not None:
-        lines.append(f"# config file: {config_path}")
-    body = yaml.safe_dump(settings, sort_keys=False, default_flow_style=None, allow_unicode=True, width=10_000)
-    return "\n".join(lines) + "\n" + body
 
-
-def generate_html(wav_files, file_dates, spec_label, rec_dir, out_dir, cell_width, cell_height, flag_audio=False, flag_annotate=False, flag_speed=False, settings_text=None):
+def generate_html(wav_files, file_dates, spec_label, rec_dir, out_dir, cell_width, cell_height, flag_audio=False, flag_annotate=False, flag_speed=False, settings=None):
     """
     Generates an HTML table to display spectrograms.
 
@@ -1077,9 +1109,9 @@ def generate_html(wav_files, file_dates, spec_label, rec_dir, out_dir, cell_widt
         flag_speed (bool): Add a playback speed selector that slows the
             players down without pitch correction (time expansion, for
             listening to ultrasound). Only meaningful with flag_audio.
-        settings_text (str | None): The settings the calendar was made with
-            (see settings_summary), shown when hovering a "?" in the page
-            header. None leaves the "?" out.
+        settings (tuple | None): The (notes, rows) of settings_summary,
+            shown when hovering a "?" in the page header. None leaves the
+            "?" out.
     """
     # Look up each WAV file by its (date, time) key, regardless of the
     # original filename format/prefix, so the table only depends on the
@@ -1113,14 +1145,28 @@ def generate_html(wav_files, file_dates, spec_label, rec_dir, out_dir, cell_widt
         f.write('<link rel="stylesheet" type="text/css" href="spectrogram-table.css">\n')
         f.write("</head>\n<body>\n")
         f.write('<header class="page-header">|=|=| spectro-calendar')
-        if settings_text is not None:
+        if settings is not None:
+            notes, rows = settings
             f.write(
                 '<div class="settings">'
                 '<button type="button" class="settings-toggle" '
                 'aria-label="Settings used for this calendar" aria-describedby="settings-panel">?</button>'
                 '<div class="settings-panel" id="settings-panel" role="tooltip">'
                 '<div class="settings-title">Settings used for this calendar</div>'
-                f'<pre>{html.escape(settings_text)}</pre>'
+                + '<div class="settings-meta">' + "<br>".join(map(html.escape, notes)) + '</div>'
+                + '<table class="settings-table">'
+                '<thead><tr><td>Parameter</td><td>Value</td></tr></thead><tbody>'
+                + "".join(
+                    f'<tr><td class="settings-key">{html.escape(key)}</td>'
+                    + (
+                        f'<td class="settings-value">{html.escape(value)}</td>'
+                        if value is not None
+                        else '<td class="settings-value settings-unset">not set</td>'
+                    )
+                    + "</tr>"
+                    for key, value in rows
+                )
+                + '</tbody></table>'
                 '</div></div>'
             )
         f.write('</header>\n')
@@ -1455,7 +1501,7 @@ def main():
     if args.speed_control and not args.include_audio:
         print("Warning: --speed-control has no effect without --include-audio; no speed selector added.")
     generate_html(wav_files, file_dates, args.spec_label, rec_dir, out_dir, cell_width=cell_size[0], cell_height=cell_size[1], flag_audio=args.include_audio, flag_annotate=args.annotate, flag_speed=args.speed_control,
-                  settings_text=settings_summary(parser, args, rec_dir, out_dir, config_path))
+                  settings=settings_summary(parser, args, rec_dir, out_dir, config_path))
 
     # Create and write the CSS file
     css_path = out_dir / "spectrogram-table.css"
