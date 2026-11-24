@@ -316,14 +316,17 @@ tfoot th:first-child {
   flex-wrap: wrap;
   align-items: center;
   gap: 10px;
-  padding: 8px 12px;
+  padding: 5px 12px;
   background: #333;
   color: #fff;
+  /* Smaller than the page header, so the toolbars read as secondary. Their
+     buttons and menus follow, being sized in em or inheriting. */
+  font-size: 0.85em;
 }
 .annotate-bar button {
   font-family: inherit;
   font-size: 1em;
-  padding: 4px 10px;
+  padding: 2px 8px;
   cursor: pointer;
 }
 .annotate-bar button[disabled] {
@@ -333,7 +336,8 @@ tfoot th:first-child {
 .speed-bar select,
 .annotate-bar select {
   font-family: inherit;
-  padding: 3px;
+  font-size: inherit;
+  padding: 2px;
 }
 .speed-bar + .annotate-bar {
   border-top: 1px solid #555;
