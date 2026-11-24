@@ -6,6 +6,7 @@ with several workers, which on Windows and macOS exercises the "spawn"
 process start method used by the parallel pool.
 """
 
+import html
 import re
 import shutil
 import subprocess
@@ -16,6 +17,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 import scipy.io.wavfile as wavfile
+import yaml
 
 from spectro_calendar import __version__, cli
 
@@ -99,7 +101,7 @@ def test_basic_calendar(monkeypatch, recordings):
     assert len(links(page, "img")) == 3
     # 2 dates x 2 times, one of them without a recording
     assert page.count("<td>&nbsp;</td>") == 1
-    assert '<header class="page-header">|=|=| spectro-calendar</header>' in page
+    assert '<header class="page-header">|=|=| spectro-calendar<div class="settings">' in page
     assert 'href="https://biodiversica.xyz/"' in page
     # Optional parts stay out unless asked for
     for absent in ("<audio", "speed-select", "annotate-bar", "<script"):
@@ -207,6 +209,29 @@ def test_config_file_with_cli_override(monkeypatch, recordings, tmp_path):
     cli.main()
     assert not out_config.exists()
     assert "<audio" in read_html(out_cli, "cfg")
+
+
+def test_settings_panel_lists_the_run_as_a_config(monkeypatch, recordings, tmp_path):
+    config = tmp_path / "config.yaml"
+    config.write_text("gain: 3\ndates: ['20260301']\n", encoding="utf-8")
+    run_cli(monkeypatch, recordings, "--config", config, "--include-audio")
+    page = read_html(recordings)
+    assert 'class="settings-toggle"' in page
+    text = html.unescape(re.search(r"<pre>(.*?)</pre>", page, re.S).group(1))
+    assert f"# spectro-calendar {__version__}," in text
+    assert f"# config file: {config.resolve()}" in text
+    settings = yaml.safe_load(text)
+    # Values from the config file, the command line and the defaults alike
+    assert settings["gain"] == 3
+    assert settings["dates"] == ["20260301"]
+    assert settings["include_audio"] is True
+    assert settings["max_cores"] == 1
+    assert settings["start_time"] == "000000"
+    assert settings["recording_dir"] == str(recordings.resolve())
+    # It is a config file that the tool accepts as it is
+    replay = tmp_path / "replay.yaml"
+    replay.write_text(text, encoding="utf-8")
+    run_cli(monkeypatch, "--config", replay)
 
 
 def test_date_without_recordings_is_an_error(monkeypatch, recordings, capsys):

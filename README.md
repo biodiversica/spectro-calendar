@@ -205,6 +205,13 @@ spectro-calendar --config example_config.yaml --max-cores 2
 An unrecognised key in the configuration file is reported as an error, with
 the list of valid keys.
 
+Every calendar records the settings it was made with. Hover over the **?** at
+the right of the page header (or tab to it, or tap it on a touch screen) to
+see them, in the format of a configuration file, preceded by the
+spectro-calendar version, the time of the run and the configuration file used,
+if any. The list can be copied into a file and passed to `--config` to make
+the same calendar again.
+
 ### Options
 
 | Option | Default | Description |
@@ -510,6 +517,10 @@ The complete processing pipeline is implemented in
    percent-encoded, so names with spaces, accents or symbols such as `#`
    resolve correctly; when no relative path exists (different drives on
    Windows), an absolute `file://` address is used.
+
+   The settings of the run, formatted by `settings_summary` as YAML, are
+   placed in a panel attached to the **?** in the page header. It is shown on
+   hover or focus with CSS alone, without a script.
 
    With `--speed-control`, the page includes the speed selector and the
    `SPEED_SCRIPT` handler. With `--annotate`, each cell also includes a

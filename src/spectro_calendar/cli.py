@@ -125,6 +125,66 @@ body {
   text-align: center;
   font-weight: bold;
   letter-spacing: 0.05em;
+  /* Positioned above the table (z-index 1), so the settings panel that drops
+     down from the header is drawn over the calendar, not under it. */
+  position: relative;
+  z-index: 10;
+}
+/* The "?" at the right of the header: hovering it, or focusing it (Tab, or a
+   tap on a touch screen), shows the settings the calendar was made with. */
+.settings {
+  position: absolute;
+  top: 50%;
+  right: 12px;
+  transform: translateY(-50%);
+}
+.settings-toggle {
+  width: 1.5em;
+  height: 1.5em;
+  padding: 0;
+  border: 1px solid #fff;
+  border-radius: 50%;
+  background: transparent;
+  color: #fff;
+  font-weight: bold;
+  line-height: 1;
+  cursor: help;
+}
+.settings:hover .settings-toggle,
+.settings-toggle:focus {
+  background: #fff;
+  color: #1a1a1a;
+}
+.settings-panel {
+  display: none;
+  position: absolute;
+  top: 100%;
+  right: 0;
+  width: max-content;
+  max-width: min(640px, 90vw);
+  max-height: 75vh;
+  overflow: auto;
+  padding: 8px 12px;
+  border: 1px solid #000;
+  background: #fff;
+  color: #111;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  text-align: left;
+  font-weight: normal;
+  letter-spacing: normal;
+}
+.settings:hover .settings-panel,
+.settings:focus-within .settings-panel {
+  display: block;
+}
+.settings-title {
+  font-weight: bold;
+  margin-bottom: 4px;
+}
+.settings-panel pre {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 .page-footer {
   text-align: center;
@@ -961,7 +1021,44 @@ def html_link(target, out_dir):
     return urllib.parse.quote(Path(rel).as_posix())
 
 
-def generate_html(wav_files, file_dates, spec_label, rec_dir, out_dir, cell_width, cell_height, flag_audio=False, flag_annotate=False, flag_speed=False):
+def settings_summary(parser, args, rec_dir, out_dir, config_path=None):
+    """
+    Describes the settings a calendar was made with, as the YAML a --config
+    file takes, so it can be read at a glance or copied into a config file to
+    make the same calendar again.
+
+    Args:
+        parser (argparse.ArgumentParser): The parser args came from; its
+            actions give the option order
+        args (argparse.Namespace): The final options, after --config and the
+            command line are combined
+        rec_dir (Path): The resolved recording directory
+        out_dir (Path): The resolved output directory
+        config_path (Path | None): The --config file used, if any
+
+    Returns:
+        str: The settings as YAML, under comment lines naming the
+            spectro-calendar version, when it ran and the config file
+    """
+    import yaml
+
+    settings = {}
+    for action in parser._actions:
+        if action.dest in ("help", "version", "config"):
+            continue
+        value = getattr(args, action.dest)
+        settings[action.dest] = str(value) if isinstance(value, Path) else value
+    settings["recording_dir"] = str(rec_dir)
+    settings["output_dir"] = str(out_dir)
+
+    lines = [f"# spectro-calendar {__version__}, {datetime.now():%d-%m-%Y %H:%M}"]
+    if config_path is not None:
+        lines.append(f"# config file: {config_path}")
+    body = yaml.safe_dump(settings, sort_keys=False, default_flow_style=None, allow_unicode=True, width=10_000)
+    return "\n".join(lines) + "\n" + body
+
+
+def generate_html(wav_files, file_dates, spec_label, rec_dir, out_dir, cell_width, cell_height, flag_audio=False, flag_annotate=False, flag_speed=False, settings_text=None):
     """
     Generates an HTML table to display spectrograms.
 
@@ -980,6 +1077,9 @@ def generate_html(wav_files, file_dates, spec_label, rec_dir, out_dir, cell_widt
         flag_speed (bool): Add a playback speed selector that slows the
             players down without pitch correction (time expansion, for
             listening to ultrasound). Only meaningful with flag_audio.
+        settings_text (str | None): The settings the calendar was made with
+            (see settings_summary), shown when hovering a "?" in the page
+            header. None leaves the "?" out.
     """
     # Look up each WAV file by its (date, time) key, regardless of the
     # original filename format/prefix, so the table only depends on the
@@ -1012,7 +1112,18 @@ def generate_html(wav_files, file_dates, spec_label, rec_dir, out_dir, cell_widt
         f.write(f"<title>{html.escape(title)}</title>\n")
         f.write('<link rel="stylesheet" type="text/css" href="spectrogram-table.css">\n')
         f.write("</head>\n<body>\n")
-        f.write('<header class="page-header">|=|=| spectro-calendar</header>\n')
+        f.write('<header class="page-header">|=|=| spectro-calendar')
+        if settings_text is not None:
+            f.write(
+                '<div class="settings">'
+                '<button type="button" class="settings-toggle" '
+                'aria-label="Settings used for this calendar" aria-describedby="settings-panel">?</button>'
+                '<div class="settings-panel" id="settings-panel" role="tooltip">'
+                '<div class="settings-title">Settings used for this calendar</div>'
+                f'<pre>{html.escape(settings_text)}</pre>'
+                '</div></div>'
+            )
+        f.write('</header>\n')
 
         flag_speed = flag_speed and flag_audio
         if flag_speed:
@@ -1212,6 +1323,7 @@ def main():
     # CLI flags win over the config file: argparse only falls back to a
     # default (ours or the built-in one) when a flag isn't passed on argv.
     pre_args, _ = parser.parse_known_args()
+    config_path = None
     if pre_args.config:
         config_path = pre_args.config.resolve()
         valid_keys = {action.dest for action in parser._actions if action.dest not in ("help", "version", "config")}
@@ -1342,7 +1454,8 @@ def main():
     cell_size = args.thumbnail_scale.split(':')
     if args.speed_control and not args.include_audio:
         print("Warning: --speed-control has no effect without --include-audio; no speed selector added.")
-    generate_html(wav_files, file_dates, args.spec_label, rec_dir, out_dir, cell_width=cell_size[0], cell_height=cell_size[1], flag_audio=args.include_audio, flag_annotate=args.annotate, flag_speed=args.speed_control)
+    generate_html(wav_files, file_dates, args.spec_label, rec_dir, out_dir, cell_width=cell_size[0], cell_height=cell_size[1], flag_audio=args.include_audio, flag_annotate=args.annotate, flag_speed=args.speed_control,
+                  settings_text=settings_summary(parser, args, rec_dir, out_dir, config_path))
 
     # Create and write the CSS file
     css_path = out_dir / "spectrogram-table.css"
