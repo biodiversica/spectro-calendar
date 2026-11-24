@@ -51,10 +51,16 @@ jobs:
         run: uv run pytest
 
   # The installer ignores uv.lock and takes the newest releases, so test those
-  # too. The weekly run catches a dependency release between commits.
+  # too. The weekly run catches a dependency release between commits. Windows
+  # as well as Linux, since many users install there and a release can break
+  # on one platform only.
   tests-latest:
-    name: tests / newest dependencies
-    runs-on: ubuntu-latest
+    name: tests / newest dependencies / ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
