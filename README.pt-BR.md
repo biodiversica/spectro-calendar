@@ -534,25 +534,6 @@ tests/            # testes de ponta a ponta
 scripts/          # instaladores anexados a cada versão
 ```
 
-### Publicação de uma Versão
-
-Defina a nova versão tanto em `pyproject.toml` quanto em
-`src/spectro_calendar/__init__.py`, execute `uv lock`, faça o commit da
-alteração e, em seguida, crie e envie uma tag:
-
-```bash
-git tag v0.2.0 && git push origin v0.2.0
-```
-
-A tag dispara `.github/workflows/release.yml`. Os testes são executados nos
-três sistemas, o pacote é enviado ao PyPI e uma versão **em rascunho** é
-criada no GitHub, com os instaladores anexados e as notas de
-`.github/release-notes.md`. Depois que os destaques forem escritos, a versão
-deve ser publicada, pois os comandos de instalação baixam da versão
-*publicada* mais recente. A compilação falha se a tag não corresponder à
-versão em `pyproject.toml`, ou se essa versão for diferente da versão em
-`src/spectro_calendar/__init__.py`.
-
 ## Licença
 
 MIT; veja [LICENSE](LICENSE).

@@ -511,25 +511,6 @@ tests/            # end-to-end tests
 scripts/          # installers attached to each release
 ```
 
-### Making a Release
-
-Set the new version in both `pyproject.toml` and
-`src/spectro_calendar/__init__.py`, run `uv lock`, commit the change, and then
-create and push a tag:
-
-```bash
-git tag v0.2.0 && git push origin v0.2.0
-```
-
-The tag triggers `.github/workflows/release.yml`. The tests run on all three
-systems, the package is uploaded to PyPI, and a **draft** GitHub release is
-created with the installers attached and the notes from
-`.github/release-notes.md`. After the highlights have been written, the
-release must be published, because the installation commands download from
-the latest *published* release. The build fails if the tag does not match the
-version in `pyproject.toml`, or if that version differs from the one in
-`src/spectro_calendar/__init__.py`.
-
 ## License
 
 MIT; see [LICENSE](https://github.com/biodiversica/spectro-calendar/blob/main/LICENSE).
