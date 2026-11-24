@@ -76,16 +76,14 @@ import html
 import urllib.parse
 import io
 from pathlib import Path
-import numpy as np
-import scipy.io.wavfile as wav
-import scipy.signal as signal
-import matplotlib.pyplot as plt
 import concurrent.futures
 import os
-from PIL import Image
 import time
 from datetime import datetime
-import yaml
+
+# numpy, scipy, matplotlib, Pillow and PyYAML are imported in the functions
+# that use them, not here: together they take seconds to load, which -h,
+# --version and argument errors would otherwise wait for.
 
 from . import __version__
 from .richhelp import RichHelpParser, fatal
@@ -672,8 +670,13 @@ def load_yaml_config(config_path, valid_keys):
         ValueError: If the file can't be parsed, isn't a mapping, or
             contains keys that don't match any CLI argument
     """
+    import yaml
+
     with config_path.open() as f:
-        config = yaml.safe_load(f)
+        try:
+            config = yaml.safe_load(f)
+        except yaml.YAMLError as e:
+            raise ValueError(str(e)) from e
 
     if config is None:
         return {}
@@ -777,6 +780,11 @@ def spectrogram_scipy(
         save_fullsize (bool): Also keep the full-size PNG on disk; otherwise
             it is only rendered in memory to be downscaled into the thumbnail
     """
+    import matplotlib.pyplot as plt
+    import numpy as np
+    import scipy.io.wavfile as wav
+    import scipy.signal as signal
+    from PIL import Image
 
     # Read the audio file using scipy
     sample_rate, audio_data = wav.read(wav_path)
@@ -1209,7 +1217,7 @@ def main():
         valid_keys = {action.dest for action in parser._actions if action.dest not in ("help", "version", "config")}
         try:
             config = load_yaml_config(config_path, valid_keys)
-        except (OSError, ValueError, yaml.YAMLError) as e:
+        except (OSError, ValueError) as e:
             fatal(f"Failed to load config file '{config_path}': {e}")
         parser.set_defaults(**config)
 

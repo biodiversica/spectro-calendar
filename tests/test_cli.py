@@ -233,6 +233,28 @@ def test_unreadable_wav_is_skipped(monkeypatch, recordings, capsys):
     assert "could not be read" in capsys.readouterr().out
 
 
+def test_help_does_not_load_the_scientific_stack():
+    # numpy, scipy, matplotlib, Pillow and PyYAML take seconds to import, so
+    # -h must not touch them. A fresh interpreter, since this one has them.
+    heavy = ("numpy", "scipy", "matplotlib", "PIL", "yaml")
+    code = (
+        "import sys\n"
+        "sys.argv = ['spectro-calendar', '-h']\n"
+        "from spectro_calendar import cli\n"
+        "try:\n"
+        "    cli.main()\n"
+        "except SystemExit:\n"
+        "    pass\n"
+        f"print('LOADED', [m for m in {heavy!r} if m in sys.modules])\n"
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", code],
+        capture_output=True, text=True, encoding="utf-8", errors="replace",
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "LOADED []" in result.stdout, result.stdout[-500:]
+
+
 @pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="ffmpeg is not installed")
 def test_ffmpeg_backend(monkeypatch, recordings):
     run_cli(monkeypatch, recordings, "--use-ffmpeg", "--save-fullsize")
