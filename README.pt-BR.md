@@ -1,4 +1,4 @@
-# spectro-calendar
+# |=|=| spectro-calendar
 
 *[English version](README.md)*
 

@@ -99,7 +99,7 @@ def test_basic_calendar(monkeypatch, recordings):
     assert len(links(page, "img")) == 3
     # 2 dates x 2 times, one of them without a recording
     assert page.count("<td>&nbsp;</td>") == 1
-    assert '<header class="page-header">spectro-calendar</header>' in page
+    assert '<header class="page-header">|=|=| spectro-calendar</header>' in page
     assert 'href="https://biodiversica.xyz/"' in page
     # Optional parts stay out unless asked for
     for absent in ("<audio", "speed-select", "annotate-bar", "<script"):

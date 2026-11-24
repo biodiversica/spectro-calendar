@@ -1,4 +1,4 @@
-# spectro-calendar
+# |=|=| spectro-calendar
 
 *[Versão em português](https://github.com/biodiversica/spectro-calendar/blob/main/README.pt-BR.md)*
 

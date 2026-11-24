@@ -1004,7 +1004,7 @@ def generate_html(wav_files, file_dates, spec_label, rec_dir, out_dir, cell_widt
         f.write(f"<title>{html.escape(title)}</title>\n")
         f.write('<link rel="stylesheet" type="text/css" href="spectrogram-table.css">\n')
         f.write("</head>\n<body>\n")
-        f.write('<header class="page-header">spectro-calendar</header>\n')
+        f.write('<header class="page-header">|=|=| spectro-calendar</header>\n')
 
         flag_speed = flag_speed and flag_audio
         if flag_speed:
