@@ -42,7 +42,7 @@ changing anything.
 On Windows, run in PowerShell:
 
 ```powershell
-powershell -ExecutionPolicy ByPass -c '$env:SPECTRO_CALENDAR_UNINSTALL=1; irm https://github.com/biodiversica/spectro-calendar/releases/latest/download/install.ps1 | Out-String | iex'
+$env:SPECTRO_CALENDAR_UNINSTALL=1; irm https://github.com/biodiversica/spectro-calendar/releases/latest/download/install.ps1 | Out-String | iex
 ```
 
 On macOS and Linux:

@@ -44,7 +44,7 @@ qualquer coisa.
 `SPECTRO_CALENDAR_UNINSTALL=1`. No Windows, execute no PowerShell:
 
 ```powershell
-powershell -ExecutionPolicy ByPass -c '$env:SPECTRO_CALENDAR_UNINSTALL=1; irm https://github.com/biodiversica/spectro-calendar/releases/latest/download/install.ps1 | Out-String | iex'
+$env:SPECTRO_CALENDAR_UNINSTALL=1; irm https://github.com/biodiversica/spectro-calendar/releases/latest/download/install.ps1 | Out-String | iex
 ```
 
 No macOS e no Linux:

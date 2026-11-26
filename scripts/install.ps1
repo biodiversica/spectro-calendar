@@ -6,10 +6,14 @@
 # beforehand) and installs spectro-calendar as an isolated tool, with the
 # spectro-calendar command on the PATH. Run it again to upgrade.
 #
-# To uninstall, run it with SPECTRO_CALENDAR_UNINSTALL set (single quotes, so
-# the PowerShell it is typed into leaves $env alone):
+# To uninstall, set SPECTRO_CALENDAR_UNINSTALL and run it in the PowerShell
+# window itself:
 #
-#   powershell -ExecutionPolicy ByPass -c '$env:SPECTRO_CALENDAR_UNINSTALL=1; irm https://github.com/biodiversica/spectro-calendar/releases/latest/download/install.ps1 | Out-String | iex'
+#   $env:SPECTRO_CALENDAR_UNINSTALL=1; irm https://github.com/biodiversica/spectro-calendar/releases/latest/download/install.ps1 | Out-String | iex
+#
+# Not through powershell -c '...', with the variable in single quotes: those
+# quotes can be lost on the way in (it happened on Windows 10), and the window's
+# PowerShell then expands the variable to nothing and installs instead.
 #
 # Either way, it says what it is about to do and asks before doing any of it.
 #
@@ -21,10 +25,18 @@
 #
 # Keep this file ASCII: Windows PowerShell 5.1 reads a BOM-less script as ANSI.
 
+# All of it in a script block: the uninstall command runs this in the reader's
+# own window, and its variables ($ErrorActionPreference above all) and
+# functions must not stay behind there.
+& {
+
 $ErrorActionPreference = "Stop"
 
 $Package = if ($env:SPECTRO_CALENDAR_PACKAGE) { $env:SPECTRO_CALENDAR_PACKAGE } else { "spectro-calendar" }
 $Uninstall = $env:SPECTRO_CALENDAR_UNINSTALL
+# Cleared once read, so that the window it was set in does not uninstall the
+# next time the installer is run from it.
+if (Test-Path Env:SPECTRO_CALENDAR_UNINSTALL) { Remove-Item Env:SPECTRO_CALENDAR_UNINSTALL }
 # The version CI tests the installer on.
 $Python = "3.12"
 
@@ -142,3 +154,5 @@ recordings into a calendar of spectrograms viewed in the browser. It will:
 # Functions rather than an early return: under iex, a return at the top level
 # does not reliably end the script.
 if ($Uninstall) { Uninstall-SpectroCalendar } else { Install-SpectroCalendar }
+
+}
